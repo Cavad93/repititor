@@ -34,8 +34,7 @@ class AffiliateManager:
         
         # Инициализируем все сервисы
         self.admitad = AdmitadService({
-            'client_id': config.get('ADMITAD_CLIENT_ID'),
-            'client_secret': config.get('ADMITAD_CLIENT_SECRET'),
+            'auth_header': config.get('ADMITAD_AUTH_HEADER'),
             'website_id': config.get('ADMITAD_WEBSITE_ID')
         })
         
