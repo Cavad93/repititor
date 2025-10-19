@@ -179,7 +179,34 @@ async def run_tests():
     
     return passed == len(results)
 
-
+async def test_adaptive_learning():
+    """Тест адаптивного обучения."""
+    logger.info("Тест: Адаптивное обучение")
+    
+    from utils.personalization import AdaptiveLearning
+    
+    test_user_id = 888888888
+    
+    # Симулируем позитивное взаимодействие
+    await AdaptiveLearning.process_interaction(
+        user_id=test_user_id,
+        action_type='click',
+        item_category='electronics',
+        item_shop='wildberries'
+    )
+    
+    # Проверяем что веса изменились
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(UserPreference).where(UserPreference.user_id == test_user_id)
+        )
+        prefs = result.scalar_one_or_none()
+        
+        assert prefs.category_weights.get('electronics', 1.0) > 1.0, "Вес категории должен вырасти"
+        logger.info(f"✓ Вес категории 'electronics': {prefs.category_weights.get('electronics')}")
+    
+    return True
+    
 if __name__ == "__main__":
     success = asyncio.run(run_tests())
     sys.exit(0 if success else 1)
