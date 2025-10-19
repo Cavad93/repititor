@@ -127,6 +127,113 @@ async def test_personalization_algorithm():
         logger.error(f"✗ Ошибка алгоритма персонализации: {e}")
         return False
 
+async def test_adaptive_learning():
+    """Тест адаптивного обучения - изменение весов."""
+    logger.info("Тест: Адаптивное обучение")
+    
+    from utils.personalization import AdaptiveLearning
+    
+    try:
+        test_user_id = 888888888
+        
+        # Создаем пользователя и настройки если их нет
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(User).where(User.user_id == test_user_id)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                from datetime import datetime
+                user = User(
+                    user_id=test_user_id,
+                    username="test_adaptive",
+                    first_name="Тест",
+                    registration_date=datetime.now(),
+                    last_activity=datetime.now()
+                )
+                session.add(user)
+                await session.commit()
+            
+            # Создаем настройки если их нет
+            result = await session.execute(
+                select(UserPreference).where(UserPreference.user_id == test_user_id)
+            )
+            prefs = result.scalar_one_or_none()
+            
+            if not prefs:
+                prefs = UserPreference(
+                    user_id=test_user_id,
+                    categories=["electronics", "clothing"],
+                    favorite_shops=["wildberries", "ozon"],
+                    price_range_min=1000,
+                    price_range_max=10000,
+                    notification_frequency="daily",
+                    category_weights={},
+                    shop_weights={}
+                )
+                session.add(prefs)
+                await session.commit()
+        
+        # Симулируем ПОЗИТИВНОЕ взаимодействие
+        logger.info("  Тестируем позитивное взаимодействие (click)...")
+        await AdaptiveLearning.process_interaction(
+            user_id=test_user_id,
+            action_type='click',
+            item_category='electronics',
+            item_shop='wildberries'
+        )
+        
+        # Проверяем что веса ВЫРОСЛИ
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(UserPreference).where(UserPreference.user_id == test_user_id)
+            )
+            prefs = result.scalar_one_or_none()
+            
+            cat_weight = prefs.category_weights.get('electronics', 1.0)
+            shop_weight = prefs.shop_weights.get('wildberries', 1.0)
+            
+            logger.info(f"  После click: категория 'electronics' = {cat_weight:.2f}")
+            logger.info(f"  После click: магазин 'wildberries' = {shop_weight:.2f}")
+            
+            if cat_weight <= 1.0 or shop_weight <= 1.0:
+                logger.error("✗ Веса не увеличились после позитивного взаимодействия!")
+                return False
+        
+        # Симулируем НЕГАТИВНОЕ взаимодействие
+        logger.info("  Тестируем негативное взаимодействие (hide)...")
+        await AdaptiveLearning.process_interaction(
+            user_id=test_user_id,
+            action_type='hide',
+            item_category='clothing',
+            item_shop='ozon'
+        )
+        
+        # Проверяем что веса УМЕНЬШИЛИСЬ
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(UserPreference).where(UserPreference.user_id == test_user_id)
+            )
+            prefs = result.scalar_one_or_none()
+            
+            cat_weight = prefs.category_weights.get('clothing', 1.0)
+            shop_weight = prefs.shop_weights.get('ozon', 1.0)
+            
+            logger.info(f"  После hide: категория 'clothing' = {cat_weight:.2f}")
+            logger.info(f"  После hide: магазин 'ozon' = {shop_weight:.2f}")
+            
+            if cat_weight >= 1.0 or shop_weight >= 1.0:
+                logger.error("✗ Веса не уменьшились после негативного взаимодействия!")
+                return False
+        
+        logger.info("✓ Адаптивное обучение работает корректно")
+        return True
+        
+    except Exception as e:
+        logger.error(f"✗ Ошибка адаптивного обучения: {e}", exc_info=True)
+        return False
+
 
 async def cleanup_test_data():
     """Очистка тестовых данных."""
@@ -161,6 +268,7 @@ async def run_tests():
     results = []
     results.append(("Создание настроек", await test_create_user_preference()))
     results.append(("Алгоритм персонализации", await test_personalization_algorithm()))
+    results.append(("Адаптивное обучение", await test_adaptive_learning()))
     
     await cleanup_test_data()
     await close_db()
