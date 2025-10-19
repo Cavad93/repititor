@@ -55,17 +55,13 @@ class Settings(BaseSettings):
 # ==================== ПАРТНЕРСКИЕ ПРОГРАММЫ ====================
     
     # Admitad
-    ADMITAD_CLIENT_ID: Optional[str] = Field(
+    ADMITAD_AUTH_HEADER: Optional[str] = Field(
         default=None,
-        description="Admitad OAuth Client ID"
+        description="Admitad Base64 Authorization Header (включая 'Basic ')"
     )
-    ADMITAD_CLIENT_SECRET: Optional[str] = Field(
+    ADMITAD_WEBSITE_ID: Optional[str] = Field(
         default=None,
-        description="Admitad OAuth Client Secret"
-    )
-    ADMITAD_WEBSITE_ID: Optional[int] = Field(
-        default=None,
-        description="Admitad Website ID"
+        description="Admitad Website/Client ID (строковый идентификатор площадки)"
     )
     
     # Backit (ePN)
