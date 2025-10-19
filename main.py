@@ -26,6 +26,13 @@ async def main():
     await init_db()
     logger.info("База данных инициализирована")
     
+    # НОВОЕ: Запускаем миграции для обновления схемы БД
+    try:
+        from database.migrations import run_all_migrations
+        await run_all_migrations()
+    except Exception as e:
+        logger.warning(f"Ошибка при запуске миграций (возможно, уже применены): {e}")
+    
     # Создаем экземпляр бота с токеном из настроек
     # ParseMode.HTML позволяет использовать HTML-разметку в сообщениях
     bot = Bot(
@@ -36,8 +43,6 @@ async def main():
     # Dispatcher управляет обработкой входящих сообщений и callback'ов
     dp = Dispatcher()
     
-    # Подключаем роутеры из разных модулей-обработчиков
-    # Это модульный подход - каждый раздел функционала в отдельном файле
     # Подключаем роутеры из разных модулей-обработчиков
     # Это модульный подход - каждый раздел функционала в отдельном файле
     dp.include_router(registration.router)
