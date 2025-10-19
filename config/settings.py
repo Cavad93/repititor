@@ -51,6 +51,54 @@ class Settings(BaseSettings):
         description="Trial period in days"
     )
     
+
+# ==================== ПАРТНЕРСКИЕ ПРОГРАММЫ ====================
+    
+    # Admitad
+    ADMITAD_CLIENT_ID: Optional[str] = Field(
+        default=None,
+        description="Admitad OAuth Client ID"
+    )
+    ADMITAD_CLIENT_SECRET: Optional[str] = Field(
+        default=None,
+        description="Admitad OAuth Client Secret"
+    )
+    ADMITAD_WEBSITE_ID: Optional[int] = Field(
+        default=None,
+        description="Admitad Website ID"
+    )
+    
+    # Backit (ePN)
+    BACKIT_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Backit API Key"
+    )
+    BACKIT_USER_ID: Optional[str] = Field(
+        default=None,
+        description="Backit User ID"
+    )
+    
+    # Yandex Market
+    YANDEX_MARKET_CAMPAIGN_ID: Optional[int] = Field(
+        default=None,
+        description="Yandex Market Campaign ID"
+    )
+    YANDEX_MARKET_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Yandex Market API Key"
+    )
+    
+    # Настройки кэшбэка
+    MIN_WITHDRAWAL_AMOUNT: int = Field(
+        default=500,
+        description="Minimum withdrawal amount in rubles"
+    )
+    CASHBACK_CONFIRMATION_DAYS: int = Field(
+        default=30,
+        description="Days to wait for cashback confirmation"
+    )
+
+
     @property
     def database_url(self) -> str:
         """
