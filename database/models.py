@@ -87,20 +87,22 @@ class UserPreference(Base):
     """
     Модель настроек персонализации пользователя.
     
-    ИЗМЕНЕНО: Тип JSON колонок изменен с JSONB на JSON.
-    PostgreSQL использует специальный бинарный формат JSONB для эффективного хранения JSON,
-    а SQLite использует обычный JSON в текстовом формате. Функционально это то же самое.
+    ОБНОВЛЕНО: Добавлены поля для адаптивных весов категорий и магазинов.
     """
     __tablename__ = 'user_preferences'
     
     preference_id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False, unique=True, index=True, comment="Reference to user")
     
-    # ВАЖНОЕ ИЗМЕНЕНИЕ: Вместо JSONB используем JSON
-    # SQLite не имеет специального JSONB типа, но обычный JSON работает отлично
-    # Вы всё так же можете хранить массивы и объекты в этих полях
+    # JSON колонки для списков
     categories = Column(JSON, default=list, nullable=False, comment="Array of selected product categories")
     favorite_shops = Column(JSON, default=list, nullable=False, comment="Array of favorite shops")
+    
+    # НОВОЕ: Адаптивные веса для категорий и магазинов
+    # Формат JSON: {"electronics": 1.2, "clothing": 0.8, ...}
+    # Базовый вес = 1.0, увеличивается/уменьшается при взаимодействиях
+    category_weights = Column(JSON, default=dict, nullable=False, comment="Adaptive weights for categories")
+    shop_weights = Column(JSON, default=dict, nullable=False, comment="Adaptive weights for shops")
     
     price_range_min = Column(Integer, nullable=True, comment="Minimum price filter")
     price_range_max = Column(Integer, nullable=True, comment="Maximum price filter")
