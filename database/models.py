@@ -140,3 +140,125 @@ class UserInteraction(Base):
     
     def __repr__(self):
         return f"<UserInteraction(user={self.user_id}, action={self.action_type}, category={self.item_category})>"
+
+
+class AffiliateLink(Base):
+    """
+    Модель для хранения партнерских ссылок с кэшбэком.
+    
+    Каждая ссылка привязана к пользователю и партнерской программе.
+    Отслеживаем клики и конверсии для начисления кэшбэка.
+    """
+    __tablename__ = 'affiliate_links'
+    
+    link_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False, index=True, comment="User who got the link")
+    
+    original_url = Column(String(2048), nullable=False, comment="Original product URL")
+    affiliate_url = Column(String(2048), nullable=False, comment="Affiliate link with cashback")
+    
+    affiliate_network = Column(VARCHAR(50), nullable=False, comment="Partner network: admitad, backit, yandex_market")
+    
+    # JSON с информацией о товаре
+    product_info = Column(JSON, default=dict, nullable=False, comment="Product details: title, price, category, shop")
+    
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False, comment="Link creation time")
+    
+    clicks_count = Column(Integer, default=0, nullable=False, comment="Number of clicks")
+    last_click_at = Column(TIMESTAMP, nullable=True, comment="Last click timestamp")
+    
+    # Статус конверсии: pending, approved, rejected
+    conversion_status = Column(VARCHAR(20), default='pending', nullable=False, comment="Conversion status")
+    
+    def __repr__(self):
+        return f"<AffiliateLink(id={self.link_id}, user={self.user_id}, network={self.affiliate_network})>"
+
+
+class CashbackTransaction(Base):
+    """
+    Модель для транзакций кэшбэка.
+    
+    Фиксирует все начисления кэшбэка по партнерским ссылкам.
+    Отслеживаем статус от pending до paid.
+    """
+    __tablename__ = 'cashback_transactions'
+    
+    transaction_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False, index=True, comment="User who earned cashback")
+    link_id = Column(BigInteger, ForeignKey('affiliate_links.link_id'), nullable=True, comment="Related affiliate link")
+    
+    order_id = Column(VARCHAR(255), nullable=True, comment="Order ID from shop")
+    order_amount = Column(Integer, nullable=True, comment="Order amount in rubles")
+    
+    cashback_percent = Column(Integer, nullable=False, comment="Cashback percentage")
+    cashback_amount = Column(Integer, nullable=False, comment="Cashback amount in rubles")
+    
+    # Статус: pending (ожидает), confirmed (подтвержден), paid (выплачен), rejected (отклонен)
+    status = Column(VARCHAR(20), default='pending', nullable=False, index=True, comment="Transaction status")
+    
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False, comment="Transaction creation")
+    confirmed_at = Column(TIMESTAMP, nullable=True, comment="When confirmed by partner")
+    paid_at = Column(TIMESTAMP, nullable=True, comment="When paid to user")
+    
+    # Дополнительная информация
+    extra_data = Column(JSON, default=dict, nullable=True, comment="Additional metadata")
+    
+    def __repr__(self):
+        return f"<CashbackTransaction(id={self.transaction_id}, user={self.user_id}, amount={self.cashback_amount}, status={self.status})>"
+
+
+class UserBalance(Base):
+    """
+    Модель баланса кэшбэка пользователя.
+    
+    Один пользователь = одна запись с балансом.
+    """
+    __tablename__ = 'user_balances'
+    
+    balance_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False, unique=True, index=True, comment="User who owns the balance")
+    
+    # Текущий доступный баланс (можно вывести)
+    current_balance = Column(Integer, default=0, nullable=False, comment="Available balance in rubles")
+    
+    # Ожидающий подтверждения кэшбэк
+    pending_balance = Column(Integer, default=0, nullable=False, comment="Pending cashback in rubles")
+    
+    # Статистика
+    total_earned = Column(Integer, default=0, nullable=False, comment="Total earned ever")
+    total_withdrawn = Column(Integer, default=0, nullable=False, comment="Total withdrawn")
+    
+    updated_at = Column(TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False, comment="Last update")
+    
+    def __repr__(self):
+        return f"<UserBalance(user={self.user_id}, balance={self.current_balance}₽, pending={self.pending_balance}₽)>"
+
+
+class BalanceOperation(Base):
+    """
+    Модель операций с балансом.
+    
+    Логирует все изменения баланса для прозрачности и отладки.
+    """
+    __tablename__ = 'balance_operations'
+    
+    operation_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False, index=True, comment="User")
+    
+    # Тип операции: credit (начисление), debit (списание), withdrawal (вывод)
+    operation_type = Column(VARCHAR(20), nullable=False, comment="Operation type")
+    
+    amount = Column(Integer, nullable=False, comment="Amount in rubles")
+    
+    balance_before = Column(Integer, nullable=False, comment="Balance before operation")
+    balance_after = Column(Integer, nullable=False, comment="Balance after operation")
+    
+    description = Column(String(512), nullable=True, comment="Operation description")
+    
+    # Ссылка на транзакцию если операция связана с кэшбэком
+    transaction_id = Column(Integer, ForeignKey('cashback_transactions.transaction_id'), nullable=True, comment="Related transaction")
+    
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False, comment="Operation time")
+    
+    def __repr__(self):
+        return f"<BalanceOperation(id={self.operation_id}, user={self.user_id}, type={self.operation_type}, amount={self.amount})>"
