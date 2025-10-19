@@ -20,23 +20,21 @@ logger = logging.getLogger(__name__)
 
 async def check_pending_orders():
     """
-    Проверяет статус всех pending заказов во всех партнерских программах.
+    Проверяет статус всех pending заказов через Admitad.
     
     Эта функция должна запускаться периодически (например, каждый час).
+    Проходит по всем заказам в статусе pending и проверяет их актуальный
+    статус в Admitad. При подтверждении заказа начисляет кэшбэк пользователю.
     """
     logger.info("=" * 60)
     logger.info("ЗАПУСК ПРОВЕРКИ PENDING ЗАКАЗОВ")
     logger.info("=" * 60)
     
     try:
-        # Инициализируем менеджер
+        # Инициализируем менеджер с настройками только для Admitad
         affiliate_manager = AffiliateManager({
             'ADMITAD_AUTH_HEADER': settings.ADMITAD_AUTH_HEADER,
-            'ADMITAD_WEBSITE_ID': settings.ADMITAD_WEBSITE_ID,
-            'BACKIT_API_KEY': settings.BACKIT_API_KEY,
-            'BACKIT_USER_ID': settings.BACKIT_USER_ID,
-            'YANDEX_MARKET_CAMPAIGN_ID': settings.YANDEX_MARKET_CAMPAIGN_ID,
-            'YANDEX_MARKET_API_KEY': settings.YANDEX_MARKET_API_KEY
+            'ADMITAD_WEBSITE_ID': settings.ADMITAD_WEBSITE_ID
         })
         
         # Проверяем все pending заказы
