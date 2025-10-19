@@ -38,9 +38,15 @@ async def main():
     
     # Подключаем роутеры из разных модулей-обработчиков
     # Это модульный подход - каждый раздел функционала в отдельном файле
+    # Подключаем роутеры из разных модулей-обработчиков
+    # Это модульный подход - каждый раздел функционала в отдельном файле
     dp.include_router(registration.router)
     dp.include_router(menu.router)
     dp.include_router(profile.router)
+
+    # Подключаем роутер анкетирования (Этап 2)
+    from handlers import onboarding
+    dp.include_router(onboarding.router)
     
     logger.info("Обработчики подключены")
     
