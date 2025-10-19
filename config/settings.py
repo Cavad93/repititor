@@ -51,10 +51,10 @@ class Settings(BaseSettings):
         description="Trial period in days"
     )
     
-
+    
 # ==================== ПАРТНЕРСКИЕ ПРОГРАММЫ ====================
     
-    # Admitad
+    # Admitad - единственная партнерская программа
     ADMITAD_AUTH_HEADER: Optional[str] = Field(
         default=None,
         description="Admitad Base64 Authorization Header (включая 'Basic ')"
@@ -62,26 +62,6 @@ class Settings(BaseSettings):
     ADMITAD_WEBSITE_ID: Optional[str] = Field(
         default=None,
         description="Admitad Website/Client ID (строковый идентификатор площадки)"
-    )
-    
-    # Backit (ePN)
-    BACKIT_API_KEY: Optional[str] = Field(
-        default=None,
-        description="Backit API Key"
-    )
-    BACKIT_USER_ID: Optional[str] = Field(
-        default=None,
-        description="Backit User ID"
-    )
-    
-    # Yandex Market
-    YANDEX_MARKET_CAMPAIGN_ID: Optional[int] = Field(
-        default=None,
-        description="Yandex Market Campaign ID"
-    )
-    YANDEX_MARKET_API_KEY: Optional[str] = Field(
-        default=None,
-        description="Yandex Market API Key"
     )
     
     # Настройки кэшбэка
