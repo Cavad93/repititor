@@ -109,3 +109,32 @@ class UserPreference(Base):
     
     def __repr__(self):
         return f"<UserPreference(user={self.user_id}, freq={self.notification_frequency})>"
+
+class UserInteraction(Base):
+    """
+    Модель для отслеживания взаимодействий пользователя с предложениями.
+    
+    Эта таблица логирует все действия пользователя для адаптивного обучения
+    и улучшения персонализации со временем.
+    
+    Типы действий:
+    - view: просмотр предложения
+    - click: клик по ссылке
+    - track: добавление в отслеживаемые
+    - hide: скрытие предложения
+    - not_interested: пометка как неинтересное
+    """
+    __tablename__ = 'user_interactions'
+    
+    interaction_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False, index=True, comment="Reference to user")
+    action_type = Column(VARCHAR(50), nullable=False, comment="Type of action: view, click, track, hide, not_interested")
+    item_id = Column(VARCHAR(255), nullable=True, comment="ID of the item (deal, product, promo)")
+    item_category = Column(VARCHAR(100), nullable=True, comment="Category of the item")
+    item_shop = Column(VARCHAR(100), nullable=True, comment="Shop/marketplace of the item")
+    item_price = Column(Integer, nullable=True, comment="Price of the item")
+    timestamp = Column(TIMESTAMP, default=func.now(), nullable=False, comment="When the action occurred")
+    metadata = Column(JSON, default=dict, nullable=True, comment="Additional metadata about the interaction")
+    
+    def __repr__(self):
+        return f"<UserInteraction(user={self.user_id}, action={self.action_type}, category={self.item_category})>"
