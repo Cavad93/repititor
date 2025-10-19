@@ -1,5 +1,5 @@
 from sqlalchemy import Column, BigInteger, String, Boolean, TIMESTAMP, Integer, ForeignKey, VARCHAR, Time
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.sqlite import JSON
 from sqlalchemy.sql import func
 from datetime import datetime, timedelta
 import secrets
@@ -12,14 +12,7 @@ def generate_referral_code(length: int = 8) -> str:
     """
     Генерирует уникальный реферальный код для пользователя.
     
-    Код состоит из букв и цифр для удобства копирования и передачи.
-    Длина по умолчанию 8 символов обеспечивает достаточную уникальность.
-    
-    Args:
-        length: Длина генерируемого кода
-        
-    Returns:
-        str: Случайный реферальный код
+    НЕ ИЗМЕНИЛОСЬ: Генерация случайных кодов не зависит от типа базы данных.
     """
     alphabet = string.ascii_uppercase + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
@@ -29,22 +22,20 @@ class User(Base):
     """
     Модель пользователя Telegram бота.
     
-    Хранит основную информацию о пользователе, полученную из Telegram,
-    а также данные для работы реферальной системы и отслеживания активности.
+    ИЗМЕНЕНО: Минимальные изменения для совместимости с SQLite.
+    Основная структура таблицы осталась прежней - те же колонки с теми же типами.
     
-    Attributes:
-        user_id: Уникальный Telegram ID пользователя (первичный ключ)
-        username: Username в Telegram (может быть None если не установлен)
-        first_name: Имя пользователя из Telegram
-        last_name: Фамилия пользователя из Telegram (опционально)
-        phone: Номер телефона если пользователь поделился (опционально)
-        registration_date: Timestamp регистрации пользователя в боте
-        last_activity: Timestamp последнего взаимодействия с ботом
-        is_active: Флаг активности аккаунта (для блокировки пользователей)
-        referral_code: Уникальный код для приглашения друзей
-        referred_by: ID пользователя который пригласил этого пользователя
+    Главное отличие: SQLite имеет более простую систему типов чем PostgreSQL,
+    но SQLAlchemy автоматически преобразует типы в подходящие для SQLite.
     """
     __tablename__ = 'users'
+    
+    # Все типы колонок остались прежними
+    # SQLAlchemy автоматически конвертирует их в совместимые с SQLite типы:
+    # BigInteger -> INTEGER в SQLite
+    # VARCHAR -> TEXT в SQLite
+    # Boolean -> INTEGER (0 или 1) в SQLite
+    # TIMESTAMP -> TEXT (ISO формат) в SQLite
     
     user_id = Column(BigInteger, primary_key=True, index=True, comment="Telegram User ID")
     username = Column(VARCHAR(255), nullable=True, comment="Telegram username")
@@ -65,18 +56,8 @@ class Subscription(Base):
     """
     Модель подписки пользователя.
     
-    Управляет типом подписки, сроками действия и параметрами оплаты.
-    Поддерживает пробный период и автоматическое продление.
-    
-    Attributes:
-        subscription_id: Уникальный ID подписки
-        user_id: ID пользователя (связь с таблицей users)
-        subscription_type: Тип подписки (trial, paid, expired)
-        start_date: Дата начала текущего периода подписки
-        end_date: Дата окончания подписки
-        is_trial_used: Флаг использования пробного периода
-        payment_method: Способ оплаты (card, yookassa, etc)
-        auto_renewal: Включено ли автопродление подписки
+    НЕ ИЗМЕНИЛОСЬ: Структура таблицы абсолютно идентична версии для PostgreSQL.
+    SQLite прекрасно справляется с хранением подписок и всех их параметров.
     """
     __tablename__ = 'subscriptions'
     
@@ -97,8 +78,7 @@ class Subscription(Base):
         """
         Проверяет активна ли подписка на текущий момент.
         
-        Returns:
-            bool: True если подписка активна (дата окончания в будущем)
+        НЕ ИЗМЕНИЛОСЬ: Бизнес-логика не зависит от типа базы данных.
         """
         return self.end_date > datetime.now() if self.end_date else False
 
@@ -107,25 +87,21 @@ class UserPreference(Base):
     """
     Модель настроек персонализации пользователя.
     
-    Хранит предпочтения по категориям товаров, магазинам, ценовому диапазону
-    и параметры уведомлений для персонализированного опыта.
-    
-    Attributes:
-        preference_id: Уникальный ID записи настроек
-        user_id: ID пользователя (связь с таблицей users)
-        categories: JSON массив выбранных категорий товаров
-        favorite_shops: JSON массив избранных магазинов
-        price_range_min: Минимальная цена в фильтре товаров
-        price_range_max: Максимальная цена в фильтре товаров
-        notification_frequency: Частота уведомлений (instant, daily, weekly)
-        notification_time: Предпочитаемое время для получения уведомлений
+    ИЗМЕНЕНО: Тип JSON колонок изменен с JSONB на JSON.
+    PostgreSQL использует специальный бинарный формат JSONB для эффективного хранения JSON,
+    а SQLite использует обычный JSON в текстовом формате. Функционально это то же самое.
     """
     __tablename__ = 'user_preferences'
     
     preference_id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey('users.user_id'), nullable=False, unique=True, index=True, comment="Reference to user")
-    categories = Column(JSONB, default=list, nullable=False, comment="Array of selected product categories")
-    favorite_shops = Column(JSONB, default=list, nullable=False, comment="Array of favorite shops")
+    
+    # ВАЖНОЕ ИЗМЕНЕНИЕ: Вместо JSONB используем JSON
+    # SQLite не имеет специального JSONB типа, но обычный JSON работает отлично
+    # Вы всё так же можете хранить массивы и объекты в этих полях
+    categories = Column(JSON, default=list, nullable=False, comment="Array of selected product categories")
+    favorite_shops = Column(JSON, default=list, nullable=False, comment="Array of favorite shops")
+    
     price_range_min = Column(Integer, nullable=True, comment="Minimum price filter")
     price_range_max = Column(Integer, nullable=True, comment="Maximum price filter")
     notification_frequency = Column(VARCHAR(20), default='instant', nullable=False, comment="Notification frequency")
