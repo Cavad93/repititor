@@ -233,25 +233,29 @@ async def handle_product_url(message: Message):
     Обработчик ссылок на товары.
     
     Когда пользователь отправляет ссылку на товар,
-    бот автоматически создает кэшбэк-ссылку.
+    бот автоматически создает кэшбэк-ссылку через Admitad.
+    
+    Процесс работы:
+    1. Пользователь отправляет любую ссылку начинающуюся с http
+    2. Бот определяет магазин по доменному имени
+    3. Если магазин поддерживается, создается партнерская ссылка через Admitad
+    4. Пользователь получает кэшбэк-ссылку для перехода на товар
+    5. При покупке по этой ссылке ему начислится кэшбэк
     """
     user_id = message.from_user.id
     url = message.text.strip()
     
-    await message.answer("🔄 Создаю кэшбэк-ссылку, подожди немного...")
+    await message.answer("🔄 Создаю кэшбэк-ссылку через Admitad, подожди немного...")
     
     try:
         # Инициализируем менеджер партнерских программ
+        # Теперь передаем только настройки для Admitad
         affiliate_manager = AffiliateManager({
             'ADMITAD_AUTH_HEADER': settings.ADMITAD_AUTH_HEADER,
-            'ADMITAD_WEBSITE_ID': settings.ADMITAD_WEBSITE_ID,
-            'BACKIT_API_KEY': settings.BACKIT_API_KEY,
-            'BACKIT_USER_ID': settings.BACKIT_USER_ID,
-            'YANDEX_MARKET_CAMPAIGN_ID': settings.YANDEX_MARKET_CAMPAIGN_ID,
-            'YANDEX_MARKET_API_KEY': settings.YANDEX_MARKET_API_KEY
+            'ADMITAD_WEBSITE_ID': settings.ADMITAD_WEBSITE_ID
         })
         
-        # Генерируем партнерскую ссылку
+        # Генерируем партнерскую ссылку через Admitad
         result = await affiliate_manager.generate_affiliate_link(
             original_url=url,
             user_id=user_id,
