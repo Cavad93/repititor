@@ -1,84 +1,72 @@
 from pydantic_settings import BaseSettings
-from pydantic import Field, PostgresDsn
+from pydantic import Field
 from typing import Optional
+from pathlib import Path
 
 
 class Settings(BaseSettings):
     """
     Централизованное хранилище всех настроек приложения.
     
-    Использует pydantic для валидации и загрузки из переменных окружения.
-    Все чувствительные данные (токены, пароли) должны быть в .env файле,
-    никогда не коммитьте их в git.
+    ИЗМЕНЕНО: Убрали все настройки PostgreSQL, Redis и RabbitMQ.
+    Теперь используется SQLite который не требует никаких настроек подключения.
+    База данных создается автоматически в папке проекта.
     """
     
     # Токен Telegram бота из @BotFather
     # Пример: "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
     BOT_TOKEN: str = Field(..., description="Telegram Bot API Token")
     
-    # PostgreSQL настройки базы данных
-    # Формат: postgresql://user:password@host:port/database
-    POSTGRES_USER: str = Field(default="repititor_user", description="PostgreSQL username")
-    POSTGRES_PASSWORD: str = Field(..., description="PostgreSQL password")
-    POSTGRES_HOST: str = Field(default="localhost", description="PostgreSQL host")
-    POSTGRES_PORT: int = Field(default=5432, description="PostgreSQL port")
-    POSTGRES_DB: str = Field(default="repititor_db", description="PostgreSQL database name")
+    # Путь к файлу базы данных SQLite
+    # По умолчанию создается в папке проекта с именем repititor.db
+    # Вы можете изменить это на любой другой путь если нужно
+    DATABASE_PATH: str = Field(
+        default="repititor.db", 
+        description="Path to SQLite database file"
+    )
     
-    # Redis настройки для кэширования
-    REDIS_HOST: str = Field(default="localhost", description="Redis host")
-    REDIS_PORT: int = Field(default=6379, description="Redis port")
-    REDIS_DB: int = Field(default=0, description="Redis database number")
-    REDIS_PASSWORD: Optional[str] = Field(default=None, description="Redis password")
-    
-    # RabbitMQ для асинхронных задач Celery
-    RABBITMQ_HOST: str = Field(default="localhost", description="RabbitMQ host")
-    RABBITMQ_PORT: int = Field(default=5672, description="RabbitMQ port")
-    RABBITMQ_USER: str = Field(default="guest", description="RabbitMQ username")
-    RABBITMQ_PASSWORD: str = Field(default="guest", description="RabbitMQ password")
-    
-    # Настройки логирования
+    # Настройки логирования остаются прежними
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
     LOG_FILE: str = Field(default="bot.log", description="Log file path")
     
-    # Telegram канал для алертов администраторов
-    ADMIN_CHANNEL_ID: Optional[int] = Field(default=None, description="Admin alerts channel ID")
+    # Telegram канал для алертов администраторов (опционально)
+    ADMIN_CHANNEL_ID: Optional[int] = Field(
+        default=None, 
+        description="Admin alerts channel ID"
+    )
     
     # URL для webhook (опционально, если не используем polling)
-    WEBHOOK_URL: Optional[str] = Field(default=None, description="Webhook URL")
-    WEBHOOK_PATH: Optional[str] = Field(default="/webhook", description="Webhook path")
+    WEBHOOK_URL: Optional[str] = Field(
+        default=None, 
+        description="Webhook URL"
+    )
+    WEBHOOK_PATH: Optional[str] = Field(
+        default="/webhook", 
+        description="Webhook path"
+    )
     
     # Настройки подписки
-    TRIAL_DAYS: int = Field(default=7, description="Trial period in days")
-    
-    # Elasticsearch для логов (опционально для production)
-    ELASTICSEARCH_HOST: Optional[str] = Field(default=None, description="Elasticsearch host")
-    ELASTICSEARCH_PORT: Optional[int] = Field(default=9200, description="Elasticsearch port")
+    TRIAL_DAYS: int = Field(
+        default=7, 
+        description="Trial period in days"
+    )
     
     @property
     def database_url(self) -> str:
         """
-        Формирует полный URL для подключения к PostgreSQL.
-        Используется SQLAlchemy для создания engine.
+        Формирует URL для подключения к SQLite базе данных.
+        
+        ИЗМЕНЕНО: Вместо сложного URL для PostgreSQL с хостом, портом, 
+        пользователем и паролем, SQLite использует простой путь к файлу.
+        Формат: sqlite+aiosqlite:///путь/к/файлу.db
+        
+        Три слэша /// означают абсолютный путь, четыре //// для Windows путей.
+        Мы используем относительный путь, поэтому три слэша достаточно.
         """
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-    
-    @property
-    def redis_url(self) -> str:
-        """
-        Формирует Redis URL для подключения.
-        Если пароль указан, включает его в строку подключения.
-        """
-        if self.REDIS_PASSWORD:
-            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
-        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
-    
-    @property
-    def rabbitmq_url(self) -> str:
-        """
-        Формирует URL для подключения к RabbitMQ.
-        Используется Celery как брокер сообщений.
-        """
-        return f"amqp://{self.RABBITMQ_USER}:{self.RABBITMQ_PASSWORD}@{self.RABBITMQ_HOST}:{self.RABBITMQ_PORT}//"
+        # Преобразуем путь в абсолютный для надежности
+        db_path = Path(self.DATABASE_PATH).absolute()
+        # Для Windows путей нужен специальный формат с тремя слэшами
+        return f"sqlite+aiosqlite:///{db_path}"
     
     class Config:
         # Указываем файл с переменными окружения
