@@ -30,7 +30,7 @@ async def test_admitad_connection():
     Проверяет:
     1. Наличие настроек в .env
     2. Корректность формата авторизационного заголовка
-    3. Генерацию тестовой партнерской ссылки
+    3. Генерацию тестовых партнерских ссылок для РАЗНЫХ магазинов
     """
     logger.info("="*60)
     logger.info("ТЕСТ: Подключение к Admitad")
@@ -58,47 +58,85 @@ async def test_admitad_connection():
         auth_preview = settings.ADMITAD_AUTH_HEADER[:50] + "..." if len(settings.ADMITAD_AUTH_HEADER) > 50 else settings.ADMITAD_AUTH_HEADER
         logger.info(f"  Auth header: {auth_preview}")
         
-        # Тестируем генерацию ссылки
-        logger.info("\nГенерация тестовой deeplink...")
-        logger.info("  Используем тестовый URL от Wildberries")
+        # Тестовые URL для РАЗНЫХ магазинов
+        # Проверим все поддерживаемые магазины и найдем хотя бы один рабочий
+        test_urls = {
+            'Lamoda': 'https://www.lamoda.ru/p/mp002xw02hzg/shoes-tamaris-tufli/',
+            'МВидео': 'https://www.mvideo.ru/products/smartfon-apple-iphone-13-128gb-midnight-mlpf3-400232825',
+            'Ozon': 'https://www.ozon.ru/product/smartfon-apple-iphone-13-128gb-siniy-261044708/',
+            'Wildberries': 'https://www.wildberries.ru/catalog/12345678/detail.aspx',
+            'Яндекс.Маркет': 'https://market.yandex.ru/product--smartfon-apple-iphone-13-128gb/1234567890',
+            'СберМегаМаркет': 'https://sbermegamarket.ru/catalog/details/smartfon-apple-iphone-13-128-gb-100028374917/'
+        }
         
-        test_url = "https://www.wildberries.ru/catalog/12345678/detail.aspx"
+        logger.info("\n" + "="*60)
+        logger.info("ПРОВЕРКА ПОДКЛЮЧЕННЫХ ПРОГРАММ МАГАЗИНОВ")
+        logger.info("="*60)
+        logger.info("\nТестирование генерации deeplink для каждого магазина...")
+        logger.info("Это покажет какие программы уже активны в вашем аккаунте.\n")
+        
         test_user_id = 123456789
+        successful_shops = []
+        failed_shops = []
         
-        logger.info(f"  Original URL: {test_url}")
+        for shop_name, test_url in test_urls.items():
+            logger.info(f"🔄 Тестирую {shop_name}...")
+            logger.info(f"   URL: {test_url[:60]}...")
+            
+            affiliate_link = await admitad.generate_affiliate_link(
+                test_url, test_user_id
+            )
+            
+            if affiliate_link:
+                logger.info(f"   ✅ РАБОТАЕТ! Deeplink создан успешно")
+                logger.info(f"   Ссылка: {affiliate_link[:80]}...\n")
+                successful_shops.append(shop_name)
+            else:
+                logger.info(f"   ❌ Не работает (программа не подключена)\n")
+                failed_shops.append(shop_name)
         
-        affiliate_link = await admitad.generate_affiliate_link(
-            test_url, test_user_id
-        )
+        # Итоговый отчет
+        logger.info("="*60)
+        logger.info("ИТОГОВЫЙ ОТЧЕТ")
+        logger.info("="*60)
         
-        if affiliate_link:
-            logger.info("\n✓ Deeplink создан успешно!")
-            logger.info(f"  Партнерская ссылка: {affiliate_link[:100]}...")
-            logger.info("\n  Что это означает:")
-            logger.info("  • API Admitad работает корректно")
-            logger.info("  • Авторизация настроена правильно")
-            logger.info("  • Программа Wildberries подключена")
+        if successful_shops:
+            logger.info(f"\n✅ ПОДКЛЮЧЕННЫЕ ПРОГРАММЫ ({len(successful_shops)}):")
+            for shop in successful_shops:
+                logger.info(f"   • {shop} - готов к работе!")
+            
+            logger.info(f"\n❌ НЕ ПОДКЛЮЧЕННЫЕ ПРОГРАММЫ ({len(failed_shops)}):")
+            for shop in failed_shops:
+                logger.info(f"   • {shop} - требует подключения")
+            
+            logger.info("\n🎉 ОТЛИЧНО! Хотя бы одна программа работает!")
+            logger.info("Вы можете начать использовать бота с подключенными магазинами.")
+            logger.info(f"\nДля работы с остальными магазинами подключите их в личном кабинете Admitad.")
+            
             return True
         else:
-            logger.error("\n✗ Не удалось создать deeplink")
-            logger.info("\n  Возможные причины:")
-            logger.info("  1. Неверный ADMITAD_AUTH_HEADER")
-            logger.info("     → Проверьте что скопировали всю строку из личного кабинета")
-            logger.info("     → Убедитесь что добавили префикс 'Basic ' перед закодированной частью")
-            logger.info("  2. Неверный ADMITAD_WEBSITE_ID")
-            logger.info("     → Должен совпадать с client_id из учетных данных API")
-            logger.info("  3. Площадка не одобрена в Admitad")
-            logger.info("     → Зайдите в личный кабинет и проверьте статус площадки")
-            logger.info("  4. Не подключена программа Wildberries")
-            logger.info("     → В разделе 'Партнерские программы' найдите Wildberries")
-            logger.info("     → Подайте заявку на подключение если еще не сделали")
-            logger.info("\n  Проверьте логи выше - там могут быть детали ошибки от API")
+            logger.error(f"\n❌ НИ ОДНА ПРОГРАММА НЕ ПОДКЛЮЧЕНА")
+            logger.info("\nВСЕ МАГАЗИНЫ ТРЕБУЮТ ПОДКЛЮЧЕНИЯ:")
+            for shop in failed_shops:
+                logger.info(f"   • {shop}")
+            
+            logger.info("\n📋 ЧТО ДЕЛАТЬ:")
+            logger.info("1. Зайдите в личный кабинет Admitad: https://www.admitad.com/ru/")
+            logger.info("2. Перейдите в раздел 'Партнерские программы'")
+            logger.info("3. Найдите любой из этих магазинов (рекомендую начать с Lamoda)")
+            logger.info("4. Нажмите 'Подключить' или 'Подать заявку'")
+            logger.info("5. Дождитесь одобрения (обычно 1-24 часа)")
+            logger.info("\n💡 СОВЕТ: Lamoda и МВидео обычно одобряются быстрее всего!")
+            
+            logger.info("\n⚠️  ВРЕМЕННАЯ ПРОБЛЕМА С WILDBERRIES:")
+            logger.info("Если Wildberries не принимает заявки, используйте Lamoda или МВидео.")
+            logger.info("Функционал бота идентичен для всех магазинов.")
+            
             return False
             
     except Exception as e:
         logger.error(f"\n✗ Критическая ошибка при тестировании Admitad: {e}", exc_info=True)
         return False
-
 
 async def test_affiliate_manager():
     """
