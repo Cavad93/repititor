@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta
 import logging
+from aiogram.fsm.context import FSMContext
 
 from database.connection import async_session_maker
 from database.models import User, Subscription
@@ -17,7 +18,7 @@ router = Router()
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, state: FSMContext):
     """
     Обработчик команды /start - первая точка входа в бота.
     
@@ -33,6 +34,7 @@ async def cmd_start(message: Message):
     
     Args:
         message: Объект сообщения от Telegram с информацией о пользователе
+        state: FSM контекст для управления состояниями анкетирования
     """
     # Получаем Telegram ID пользователя - это уникальный идентификатор
     user_id = message.from_user.id
@@ -70,6 +72,10 @@ async def cmd_start(message: Message):
                     f"С возвращением, {message.from_user.first_name}! 👋\n\n"
                     "Рад снова видеть тебя. Давай найдем для тебя лучшие скидки!"
                 )
+                
+                # Показываем главное меню существующему пользователю
+                await show_main_menu(message)
+                
             else:
                 # Это новый пользователь - создаем запись в базе
                 logger.info(f"Регистрация нового пользователя {user_id} (@{message.from_user.username})")
@@ -143,9 +149,28 @@ async def cmd_start(message: Message):
                     welcome_text += "\n\n✨ Спасибо что пришел по приглашению друга!"
                 
                 await message.answer(welcome_text)
-            
-            # Показываем главное меню всем пользователям (новым и вернувшимся)
-            await show_main_menu(message)
+                
+                # Предлагаем пройти анкетирование для персонализации
+                from aiogram.utils.keyboard import InlineKeyboardBuilder
+                
+                onboarding_builder = InlineKeyboardBuilder()
+                onboarding_builder.button(
+                    text="🎯 Настроить персонализацию",
+                    callback_data="registration:start_onboarding"
+                )
+                onboarding_builder.button(
+                    text="⏭️ Пропустить (настрою позже)",
+                    callback_data="registration:skip_onboarding"
+                )
+                onboarding_builder.adjust(1)
+                
+                await message.answer(
+                    "🎯 <b>Персонализация рекомендаций</b>\n\n"
+                    "Хочешь настроить бота под свои интересы прямо сейчас?\n\n"
+                    "Это займет 2-3 минуты, и ты будешь получать только релевантные предложения!\n\n"
+                    "Или можешь сделать это позже через команду /setup",
+                    reply_markup=onboarding_builder.as_markup()
+                )
             
         except Exception as e:
             # Логируем любые ошибки в процессе регистрации
@@ -206,3 +231,25 @@ async def cmd_help(message: Message):
     
     await message.answer(help_text)
     logger.info(f"Пользователь {message.from_user.id} запросил справку")
+
+@router.callback_query(F.data == "registration:start_onboarding")
+async def callback_start_onboarding_after_registration(callback: CallbackQuery, state: FSMContext):
+    """Запуск анкетирования сразу после регистрации."""
+    from handlers.onboarding import start_onboarding
+    
+    await callback.answer()
+    await start_onboarding(callback.message, state, is_restart=False)
+
+
+@router.callback_query(F.data == "registration:skip_onboarding")
+async def callback_skip_onboarding(callback: CallbackQuery):
+    """Пропуск анкетирования."""
+    await callback.answer()
+    await callback.message.edit_text(
+        "Хорошо! Ты можешь настроить персонализацию в любой момент:\n"
+        "• Команда /setup\n"
+        "• Раздел ⚙️ Настройки в главном меню\n\n"
+        "Используй /start для открытия главного меню."
+    )
+    
+    logger.info(f"Пользователь {callback.from_user.id} пропустил анкетирование")
