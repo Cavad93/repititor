@@ -251,7 +251,7 @@ class AdaptiveLearning:
         """
         Обрабатывает взаимодействие пользователя и обновляет предпочтения.
         
-        ОБНОВЛЕНО: Применяет коэффициенты к весам категорий и магазинов.
+        ИСПРАВЛЕНО: Использует flag_modified() для корректного сохранения JSON полей.
         
         Args:
             user_id: ID пользователя
@@ -262,6 +262,7 @@ class AdaptiveLearning:
         from database.connection import async_session_maker
         from database.models import UserPreference, UserInteraction
         from sqlalchemy import select
+        from sqlalchemy.orm.attributes import flag_modified  # НОВОЕ: импорт flag_modified
         
         async with async_session_maker() as session:
             try:
@@ -311,6 +312,10 @@ class AdaptiveLearning:
                         new_weight = max(current_weight - cls.NEGATIVE_FEEDBACK_DECAY, cls.MIN_WEIGHT)
                         prefs.shop_weights[item_shop] = new_weight
                         logger.info(f"  Вес магазина '{item_shop}': {current_weight:.2f} → {new_weight:.2f}")
+                    
+                    # КРИТИЧНО: Помечаем JSON поля как измененные
+                    flag_modified(prefs, 'category_weights')
+                    flag_modified(prefs, 'shop_weights')
                 
                 elif action_type in ['click', 'track']:
                     # ПОЗИТИВНАЯ обратная связь - ПОВЫШАЕМ вес
@@ -331,6 +336,10 @@ class AdaptiveLearning:
                         new_weight = min(current_weight + cls.POSITIVE_FEEDBACK_BOOST, cls.MAX_WEIGHT)
                         prefs.shop_weights[item_shop] = new_weight
                         logger.info(f"  Вес магазина '{item_shop}': {current_weight:.2f} → {new_weight:.2f}")
+                    
+                    # КРИТИЧНО: Помечаем JSON поля как измененные
+                    flag_modified(prefs, 'category_weights')
+                    flag_modified(prefs, 'shop_weights')
                     
                     # Если категория не в предпочтениях - предлагаем добавить
                     if prefs.categories and item_category not in prefs.categories:
