@@ -89,11 +89,16 @@ async def cmd_start(message: Message):
                         logger.warning(f"Реферальный код {referral_code} не найден")
                 
                 # Создаем нового пользователя с данными из Telegram
+                # Валидация и санитизация данных пользователя
+                username = message.from_user.username[:255] if message.from_user.username else None
+                first_name = message.from_user.first_name[:255] if message.from_user.first_name else "Пользователь"
+                last_name = message.from_user.last_name[:255] if message.from_user.last_name else None
+
                 new_user = User(
                     user_id=user_id,
-                    username=message.from_user.username,
-                    first_name=message.from_user.first_name,
-                    last_name=message.from_user.last_name,
+                    username=username,
+                    first_name=first_name,
+                    last_name=last_name,
                     registration_date=datetime.now(),
                     last_activity=datetime.now(),
                     is_active=True,
