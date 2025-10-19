@@ -134,7 +134,7 @@ class UserInteraction(Base):
     item_shop = Column(VARCHAR(100), nullable=True, comment="Shop/marketplace of the item")
     item_price = Column(Integer, nullable=True, comment="Price of the item")
     timestamp = Column(TIMESTAMP, default=func.now(), nullable=False, comment="When the action occurred")
-    metadata = Column(JSON, default=dict, nullable=True, comment="Additional metadata about the interaction")
+    extra_data = Column(JSON, default=dict, nullable=True, comment="Additional metadata about the interaction")
     
     def __repr__(self):
         return f"<UserInteraction(user={self.user_id}, action={self.action_type}, category={self.item_category})>"
