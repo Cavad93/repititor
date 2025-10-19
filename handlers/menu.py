@@ -2,6 +2,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
+from aiogram.fsm.context import FSMContext
 
 logger = logging.getLogger(__name__)
 
@@ -228,25 +229,94 @@ async def callback_settings(callback: CallbackQuery):
     """
     try:
         await callback.answer()
+        user_id = callback.from_user.id
         
-        await callback.message.edit_text(
-            "⚙️ <b>Настройки</b>\n\n"
-            "Этот раздел будет реализован на следующих этапах.\n\n"
-            "Доступные настройки:\n"
-            "• Категории интересов\n"
-            "• Любимые магазины\n"
-            "• Ценовой диапазон\n"
-            "• Частота уведомлений\n"
-            "• Время получения уведомлений\n"
-            "• Язык интерфейса\n\n"
-            "Нажми /start чтобы вернуться в главное меню."
-        )
+        # Импортируем здесь чтобы избежать циклических импортов
+        from sqlalchemy import select
+        from database.connection import async_session_maker
+        from database.models import UserPreference
+        from aiogram.utils.keyboard import InlineKeyboardBuilder
+        
+        async with async_session_maker() as session:
+            # Проверяем есть ли у пользователя настройки
+            result = await session.execute(
+                select(UserPreference).where(UserPreference.user_id == user_id)
+            )
+            prefs = result.scalar_one_or_none()
+            
+            if prefs:
+                # Форматируем текущие настройки для отображения
+                from handlers.onboarding import CATEGORIES, SHOPS, PRICE_RANGES, NOTIFICATION_FREQ
+                
+                # Категории
+                cat_names = [name for name, cat_id in CATEGORIES if cat_id in (prefs.categories or [])]
+                categories_str = ", ".join(cat_names) if cat_names else "Не настроено"
+                
+                # Магазины
+                shop_names = [name for name, shop_id in SHOPS if shop_id in (prefs.favorite_shops or [])]
+                shops_str = ", ".join(shop_names) if shop_names else "Не настроено"
+                
+                # Ценовой диапазон
+                if prefs.price_range_min and prefs.price_range_max:
+                    price_str = f"{prefs.price_range_min} - {prefs.price_range_max} ₽"
+                else:
+                    price_str = "Любой"
+                
+                # Уведомления
+                freq_name = next((name for name, freq_id in NOTIFICATION_FREQ if freq_id == prefs.notification_frequency), "Не настроено")
+                notif_str = freq_name
+                if prefs.notification_time:
+                    notif_str += f" в {prefs.notification_time.strftime('%H:%M')}"
+                
+                settings_text = (
+                    "⚙️ <b>Твои настройки персонализации</b>\n\n"
+                    "━━━━━━━━━━━━━━━━━\n\n"
+                    f"📱 <b>Категории:</b>\n{categories_str}\n\n"
+                    f"🏪 <b>Магазины:</b>\n{shops_str}\n\n"
+                    f"💰 <b>Ценовой диапазон:</b>\n{price_str}\n\n"
+                    f"🔔 <b>Уведомления:</b>\n{notif_str}\n\n"
+                    "━━━━━━━━━━━━━━━━━\n\n"
+                    "Что хочешь сделать?"
+                )
+                
+                builder = InlineKeyboardBuilder()
+                builder.button(text="✏️ Изменить настройки", callback_data="onboarding:edit")
+                builder.button(text="🔄 Пройти анкету заново", callback_data="onboarding:restart")
+                builder.button(text="🏠 Главное меню", callback_data="profile:back_to_menu")
+                builder.adjust(1)
+                
+                await callback.message.edit_text(settings_text, reply_markup=builder.as_markup())
+            else:
+                # Настроек нет - предлагаем пройти анкетирование
+                builder = InlineKeyboardBuilder()
+                builder.button(text="🎯 Настроить персонализацию", callback_data="settings:start_onboarding")
+                builder.button(text="🏠 Главное меню", callback_data="profile:back_to_menu")
+                builder.adjust(1)
+                
+                await callback.message.edit_text(
+                    "⚙️ <b>Настройки персонализации</b>\n\n"
+                    "У тебя еще нет настроенных предпочтений.\n\n"
+                    "Пройди быструю анкету (2-3 минуты), и бот будет показывать "
+                    "только интересные тебе предложения!\n\n"
+                    "Это значительно улучшит твой опыт использования бота.",
+                    reply_markup=builder.as_markup()
+                )
         
         logger.info(f"Пользователь {callback.from_user.id} открыл настройки")
     
     except Exception as e:
         logger.error(f"Ошибка в обработчике настроек для пользователя {callback.from_user.id}: {e}", exc_info=True)
         await callback.answer("Произошла ошибка. Попробуй позже.", show_alert=True)
+
+
+@router.callback_query(F.data == "settings:start_onboarding")
+async def callback_start_onboarding_from_settings(callback: CallbackQuery, state: FSMContext):
+    """Запуск анкетирования из раздела настроек."""
+    from handlers.onboarding import start_onboarding
+    from aiogram.fsm.context import FSMContext
+    
+    await callback.answer()
+    await start_onboarding(callback.message, state, is_restart=False)
 
 
 @router.callback_query(F.data == "menu:help")
