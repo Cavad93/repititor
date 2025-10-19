@@ -10,6 +10,7 @@ import logging
 from database.connection import async_session_maker
 from database.models import User, UserPreference
 from handlers.states import OnboardingStates
+from database.models import UserPreference
 
 logger = logging.getLogger(__name__)
 
@@ -761,3 +762,75 @@ async def callback_save_preferences(callback: CallbackQuery, state: FSMContext):
                 "Попробуй еще раз через /setup"
             )
             await state.clear()
+
+@router.callback_query(F.data == "onboarding:edit")
+async def callback_edit_onboarding(callback: CallbackQuery, state: FSMContext):
+    """Редактирование существующих настроек с предзаполнением."""
+    await callback.answer()
+    user_id = callback.from_user.id
+    
+    async with async_session_maker() as session:
+        try:
+            # Загружаем текущие настройки
+            result = await session.execute(
+                select(UserPreference).where(UserPreference.user_id == user_id)
+            )
+            prefs = result.scalar_one_or_none()
+            
+            if not prefs:
+                # Если настроек нет - запускаем обычное анкетирование
+                await start_onboarding(callback.message, state, is_restart=False)
+                return
+            
+            # Предзаполняем FSM существующими значениями
+            await state.update_data(
+                selected_categories=prefs.categories or [],
+                selected_shops=prefs.favorite_shops or [],
+                selected_price_ranges=_convert_price_to_ranges(prefs),
+                notification_frequency=prefs.notification_frequency or "instant",
+                notification_time=prefs.notification_time.strftime("%H:%M") if prefs.notification_time else None
+            )
+            
+            # Запускаем анкетирование с предзаполненными данными
+            await state.set_state(OnboardingStates.categories)
+            
+            intro_text = (
+                "✏️ <b>Редактирование настроек</b>\n\n"
+                "Твои текущие настройки уже выбраны (отмечены ✅)\n\n"
+                "Ты можешь изменить их и сохранить.\n\n"
+                "━━━━━━━━━━━━━━━━━\n\n"
+                "📋 <b>Шаг 1 из 4: Категории товаров</b>\n\n"
+                f"Выбрано: {len(prefs.categories or [])}"
+            )
+            
+            keyboard = get_categories_keyboard(prefs.categories or [])
+            await callback.message.edit_text(intro_text, reply_markup=keyboard)
+            
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке настроек для редактирования: {e}", exc_info=True)
+            await callback.message.edit_text(
+                "❌ Произошла ошибка при загрузке настроек.\n\n"
+                "Попробуй команду /setup"
+            )
+
+
+def _convert_price_to_ranges(prefs: UserPreference) -> list:
+    """Конвертирует min/max цены обратно в выбранные диапазоны."""
+    if not prefs.price_range_min and not prefs.price_range_max:
+        return ["any"]
+    
+    ranges = []
+    min_price = prefs.price_range_min or 0
+    max_price = prefs.price_range_max or 999999
+    
+    # Определяем какие диапазоны были выбраны
+    if min_price <= 0 and max_price >= 1000:
+        ranges.append("0-1000")
+    if min_price <= 1000 and max_price >= 3000:
+        ranges.append("1000-3000")
+    if min_price <= 3000 and max_price >= 10000:
+        ranges.append("3000-10000")
+    if min_price >= 10000 or max_price > 10000:
+        ranges.append("10000+")
+    
+    return ranges if ranges else ["any"]
