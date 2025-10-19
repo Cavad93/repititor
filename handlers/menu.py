@@ -24,10 +24,8 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
     Returns:
         InlineKeyboardMarkup: Готовая клавиатура для отправки пользователю
     """
-    # Используем InlineKeyboardBuilder для удобного создания клавиатуры
     builder = InlineKeyboardBuilder()
     
-    # Первый ряд - основной функционал поиска
     builder.row(
         InlineKeyboardButton(
             text="🔍 Найти скидки",
@@ -39,7 +37,6 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
         )
     )
     
-    # Второй ряд - финансовые инструменты
     builder.row(
         InlineKeyboardButton(
             text="💳 Промокоды и кэшбэк",
@@ -51,7 +48,6 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
         )
     )
     
-    # Третий ряд - настройки и управление аккаунтом
     builder.row(
         InlineKeyboardButton(
             text="⚙️ Настройки",
@@ -63,7 +59,6 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
         )
     )
     
-    # Четвертый ряд - дополнительные функции
     builder.row(
         InlineKeyboardButton(
             text="❓ Помощь",
@@ -88,17 +83,22 @@ async def show_main_menu(message: Message):
     Args:
         message: Объект сообщения для ответа пользователю
     """
-    menu_text = (
-        "🏠 <b>Главное меню</b>\n\n"
-        "Выбери нужный раздел из меню ниже:"
-    )
+    try:
+        menu_text = (
+            "🏠 <b>Главное меню</b>\n\n"
+            "Выбери нужный раздел из меню ниже:"
+        )
+        
+        await message.answer(
+            text=menu_text,
+            reply_markup=get_main_menu_keyboard()
+        )
+        
+        logger.info(f"Главное меню показано пользователю {message.from_user.id}")
     
-    await message.answer(
-        text=menu_text,
-        reply_markup=get_main_menu_keyboard()
-    )
-    
-    logger.info(f"Главное меню показано пользователю {message.from_user.id}")
+    except Exception as e:
+        logger.error(f"Ошибка при отображении главного меню для пользователя {message.from_user.id}: {e}", exc_info=True)
+        await message.answer("Произошла ошибка при загрузке меню. Попробуй команду /start еще раз.")
 
 
 @router.callback_query(F.data == "menu:find_deals")
@@ -112,21 +112,24 @@ async def callback_find_deals(callback: CallbackQuery):
     Args:
         callback: Callback query от нажатия на кнопку
     """
-    # Отвечаем на callback чтобы убрать "часики" загрузки
-    await callback.answer()
+    try:
+        await callback.answer()
+        
+        await callback.message.edit_text(
+            "🔍 <b>Поиск скидок</b>\n\n"
+            "Этот раздел находится в разработке и будет доступен на следующих этапах.\n\n"
+            "Здесь ты сможешь:\n"
+            "• Искать актуальные скидки по категориям\n"
+            "• Фильтровать по магазинам и ценам\n"
+            "• Получать персонализированные рекомендации\n\n"
+            "Нажми /start чтобы вернуться в главное меню."
+        )
+        
+        logger.info(f"Пользователь {callback.from_user.id} открыл раздел поиска скидок")
     
-    # Временная заглушка - функционал будет добавлен на следующих этапах
-    await callback.message.edit_text(
-        "🔍 <b>Поиск скидок</b>\n\n"
-        "Этот раздел находится в разработке и будет доступен на следующих этапах.\n\n"
-        "Здесь ты сможешь:\n"
-        "• Искать актуальные скидки по категориям\n"
-        "• Фильтровать по магазинам и ценам\n"
-        "• Получать персонализированные рекомендации\n\n"
-        "Нажми /start чтобы вернуться в главное меню."
-    )
-    
-    logger.info(f"Пользователь {callback.from_user.id} открыл раздел поиска скидок")
+    except Exception as e:
+        logger.error(f"Ошибка в обработчике поиска скидок для пользователя {callback.from_user.id}: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка. Попробуй позже.", show_alert=True)
 
 
 @router.callback_query(F.data == "menu:tracked_items")
@@ -137,20 +140,25 @@ async def callback_tracked_items(callback: CallbackQuery):
     Args:
         callback: Callback query от нажатия на кнопку
     """
-    await callback.answer()
+    try:
+        await callback.answer()
+        
+        await callback.message.edit_text(
+            "👀 <b>Мои отслеживаемые товары</b>\n\n"
+            "Этот раздел будет реализован на следующих этапах.\n\n"
+            "Функции раздела:\n"
+            "• Список отслеживаемых товаров\n"
+            "• Текущие цены и история изменений\n"
+            "• Уведомления о снижении цен\n"
+            "• Быстрое добавление новых товаров\n\n"
+            "Нажми /start чтобы вернуться в главное меню."
+        )
+        
+        logger.info(f"Пользователь {callback.from_user.id} открыл отслеживаемые товары")
     
-    await callback.message.edit_text(
-        "👀 <b>Мои отслеживаемые товары</b>\n\n"
-        "Этот раздел будет реализован на следующих этапах.\n\n"
-        "Функции раздела:\n"
-        "• Список отслеживаемых товаров\n"
-        "• Текущие цены и история изменений\n"
-        "• Уведомления о снижении цен\n"
-        "• Быстрое добавление новых товаров\n\n"
-        "Нажми /start чтобы вернуться в главное меню."
-    )
-    
-    logger.info(f"Пользователь {callback.from_user.id} открыл отслеживаемые товары")
+    except Exception as e:
+        logger.error(f"Ошибка в обработчике отслеживаемых товаров для пользователя {callback.from_user.id}: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка. Попробуй позже.", show_alert=True)
 
 
 @router.callback_query(F.data == "menu:cashback")
@@ -161,19 +169,24 @@ async def callback_cashback(callback: CallbackQuery):
     Args:
         callback: Callback query от нажатия на кнопку
     """
-    await callback.answer()
+    try:
+        await callback.answer()
+        
+        await callback.message.edit_text(
+            "💳 <b>Промокоды и кэшбэк</b>\n\n"
+            "Раздел в разработке. Скоро здесь появятся:\n\n"
+            "• Актуальные промокоды для популярных магазинов\n"
+            "• Интеграция с кэшбэк-сервисами\n"
+            "• Автоматический поиск лучших предложений\n"
+            "• История использованных промокодов\n\n"
+            "Нажми /start чтобы вернуться в главное меню."
+        )
+        
+        logger.info(f"Пользователь {callback.from_user.id} открыл промокоды и кэшбэк")
     
-    await callback.message.edit_text(
-        "💳 <b>Промокоды и кэшбэк</b>\n\n"
-        "Раздел в разработке. Скоро здесь появятся:\n\n"
-        "• Актуальные промокоды для популярных магазинов\n"
-        "• Интеграция с кэшбэк-сервисами\n"
-        "• Автоматический поиск лучших предложений\n"
-        "• История использованных промокодов\n\n"
-        "Нажми /start чтобы вернуться в главное меню."
-    )
-    
-    logger.info(f"Пользователь {callback.from_user.id} открыл промокоды и кэшбэк")
+    except Exception as e:
+        logger.error(f"Ошибка в обработчике промокодов для пользователя {callback.from_user.id}: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка. Попробуй позже.", show_alert=True)
 
 
 @router.callback_query(F.data == "menu:savings_history")
@@ -184,20 +197,56 @@ async def callback_savings_history(callback: CallbackQuery):
     Args:
         callback: Callback query от нажатия на кнопку
     """
-    await callback.answer()
+    try:
+        await callback.answer()
+        
+        await callback.message.edit_text(
+            "📊 <b>История экономии</b>\n\n"
+            "Этот раздел будет доступен после реализации основного функционала.\n\n"
+            "Здесь ты увидишь:\n"
+            "• Общую сумму сэкономленных средств\n"
+            "• Статистику по месяцам и категориям\n"
+            "• Самые выгодные покупки\n"
+            "• Графики и аналитику\n\n"
+            "Нажми /start чтобы вернуться в главное меню."
+        )
+        
+        logger.info(f"Пользователь {callback.from_user.id} открыл историю экономии")
     
-    await callback.message.edit_text(
-        "📊 <b>История экономии</b>\n\n"
-        "Этот раздел будет доступен после реализации основного функционала.\n\n"
-        "Здесь ты увидишь:\n"
-        "• Общую сумму сэкономленных средств\n"
-        "• Статистику по месяцам и категориям\n"
-        "• Самые выгодные покупки\n"
-        "• Графики и аналитику\n\n"
-        "Нажми /start чтобы вернуться в главное меню."
-    )
+    except Exception as e:
+        logger.error(f"Ошибка в обработчике истории экономии для пользователя {callback.from_user.id}: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка. Попробуй позже.", show_alert=True)
+
+
+@router.callback_query(F.data == "menu:settings")
+async def callback_settings(callback: CallbackQuery):
+    """
+    Обработчик кнопки "Настройки".
     
-    logger.info(f"Пользователь {callback.from_user.id} открыл историю экономии")
+    Args:
+        callback: Callback query от нажатия на кнопку
+    """
+    try:
+        await callback.answer()
+        
+        await callback.message.edit_text(
+            "⚙️ <b>Настройки</b>\n\n"
+            "Этот раздел будет реализован на следующих этапах.\n\n"
+            "Доступные настройки:\n"
+            "• Категории интересов\n"
+            "• Любимые магазины\n"
+            "• Ценовой диапазон\n"
+            "• Частота уведомлений\n"
+            "• Время получения уведомлений\n"
+            "• Язык интерфейса\n\n"
+            "Нажми /start чтобы вернуться в главное меню."
+        )
+        
+        logger.info(f"Пользователь {callback.from_user.id} открыл настройки")
+    
+    except Exception as e:
+        logger.error(f"Ошибка в обработчике настроек для пользователя {callback.from_user.id}: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка. Попробуй позже.", show_alert=True)
 
 
 @router.callback_query(F.data == "menu:help")
@@ -208,20 +257,25 @@ async def callback_help(callback: CallbackQuery):
     Args:
         callback: Callback query от нажатия на кнопку
     """
-    await callback.answer()
+    try:
+        await callback.answer()
+        
+        help_text = (
+            "❓ <b>Помощь и поддержка</b>\n\n"
+            "Используй команду /help для подробной справки по всем функциям бота.\n\n"
+            "Если у тебя возникли вопросы или проблемы:\n"
+            "• Проверь раздел FAQ (в разработке)\n"
+            "• Напиши в поддержку (функция скоро появится)\n"
+            "• Посети наш канал с новостями (будет добавлен)\n\n"
+            "Нажми /start чтобы вернуться в главное меню."
+        )
+        
+        await callback.message.edit_text(help_text)
+        logger.info(f"Пользователь {callback.from_user.id} открыл помощь")
     
-    help_text = (
-        "❓ <b>Помощь и поддержка</b>\n\n"
-        "Используй команду /help для подробной справки по всем функциям бота.\n\n"
-        "Если у тебя возникли вопросы или проблемы:\n"
-        "• Проверь раздел FAQ (в разработке)\n"
-        "• Напиши в поддержку (функция скоро появится)\n"
-        "• Посети наш канал с новостями (будет добавлен)\n\n"
-        "Нажми /start чтобы вернуться в главное меню."
-    )
-    
-    await callback.message.edit_text(help_text)
-    logger.info(f"Пользователь {callback.from_user.id} открыл помощь")
+    except Exception as e:
+        logger.error(f"Ошибка в обработчике помощи для пользователя {callback.from_user.id}: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка. Попробуй позже.", show_alert=True)
 
 
 @router.callback_query(F.data == "menu:referral")
@@ -235,20 +289,23 @@ async def callback_referral(callback: CallbackQuery):
     Args:
         callback: Callback query от нажатия на кнопку
     """
-    await callback.answer()
+    try:
+        await callback.answer()
+        
+        await callback.message.edit_text(
+            "👥 <b>Реферальная программа</b>\n\n"
+            "Приглашай друзей и получай бонусы!\n\n"
+            "Твоя реферальная ссылка:\n"
+            "<code>t.me/your_bot?start=ref_CODE</code>\n\n"
+            "За каждого приглашенного друга ты получишь:\n"
+            "🎁 +7 дней подписки\n"
+            "💰 Бонусы в будущем\n\n"
+            "Полная статистика будет доступна на следующих этапах.\n\n"
+            "Нажми /start чтобы вернуться в главное меню."
+        )
+        
+        logger.info(f"Пользователь {callback.from_user.id} открыл реферальную программу")
     
-    # На следующих этапах здесь будет загрузка реального кода из БД
-    # Пока показываем временную информацию
-    await callback.message.edit_text(
-        "👥 <b>Реферальная программа</b>\n\n"
-        "Приглашай друзей и получай бонусы!\n\n"
-        "Твоя реферальная ссылка:\n"
-        "<code>t.me/your_bot?start=ref_CODE</code>\n\n"
-        "За каждого приглашенного друга ты получишь:\n"
-        "🎁 +7 дней подписки\n"
-        "💰 Бонусы в будущем\n\n"
-        "Полная статистика будет доступна на следующих этапах.\n\n"
-        "Нажми /start чтобы вернуться в главное меню."
-    )
-    
-    logger.info(f"Пользователь {callback.from_user.id} открыл реферальную программу")
+    except Exception as e:
+        logger.error(f"Ошибка в обработчике реферальной программы для пользователя {callback.from_user.id}: {e}", exc_info=True)
+        await callback.answer("Произошла ошибка. Попробуй позже.", show_alert=True)
