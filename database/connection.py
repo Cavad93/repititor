@@ -62,18 +62,23 @@ async def init_db():
         raise
 
 
-async def get_session() -> AsyncSession:
+async def get_session():
     """
-    Dependency функция для получения сессии БД.
+    Генератор для получения сессии БД через dependency injection.
     
-    НЕ ИЗМЕНИЛОСЬ: Эта функция работает абсолютно одинаково для любой БД.
+    Эта функция работает абсолютно одинаково для любой БД.
     SQLAlchemy предоставляет универсальный интерфейс для работы с сессиями.
     
-    Использование:
-        async with get_session() as session:
+    Примечание: Эта функция предназначена для использования в качестве dependency
+    в веб-фреймворках (FastAPI, etc). Для обычного использования в handlers
+    применяйте напрямую async_session_maker().
+    
+    Использование в FastAPI:
+        @app.get("/users")
+        async def get_users(session: AsyncSession = Depends(get_session)):
             result = await session.execute(query)
     
-    Returns:
+    Yields:
         AsyncSession: Асинхронная сессия для работы с БД
     """
     async with async_session_maker() as session:
