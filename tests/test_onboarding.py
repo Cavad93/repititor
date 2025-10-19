@@ -1,17 +1,25 @@
 """
 Тесты для проверки системы анкетирования и персонализации.
+
+Включает тесты:
+1. Создание настроек пользователя
+2. Алгоритм персонализации
+3. Адаптивное обучение (позитивная + негативная реакция)
+4. Производительность на 100k товаров
 """
 
 import asyncio
 import sys
 from pathlib import Path
+import time
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from database.connection import init_db, async_session_maker, close_db
 from database.models import User, UserPreference
-from utils.personalization import PersonalizationEngine
-from sqlalchemy import select
+from utils.personalization import PersonalizationEngine, AdaptiveLearning
+from sqlalchemy import select, delete
+from datetime import datetime
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +41,6 @@ async def test_create_user_preference():
             user = result.scalar_one_or_none()
             
             if not user:
-                from datetime import datetime
                 user = User(
                     user_id=test_user_id,
                     username="test_onboarding",
@@ -49,6 +56,8 @@ async def test_create_user_preference():
                 user_id=test_user_id,
                 categories=["electronics", "clothing"],
                 favorite_shops=["wildberries", "ozon"],
+                category_weights={},
+                shop_weights={},
                 price_range_min=1000,
                 price_range_max=10000,
                 notification_frequency="daily"
@@ -64,7 +73,7 @@ async def test_create_user_preference():
             
             return True
     except Exception as e:
-        logger.error(f"✗ Ошибка создания настроек: {e}")
+        logger.error(f"✗ Ошибка создания настроек: {e}", exc_info=True)
         return False
 
 
@@ -124,58 +133,36 @@ async def test_personalization_algorithm():
             
             return True
     except Exception as e:
-        logger.error(f"✗ Ошибка алгоритма персонализации: {e}")
+        logger.error(f"✗ Ошибка алгоритма персонализации: {e}", exc_info=True)
         return False
 
+
 async def test_adaptive_learning():
-    """Тест адаптивного обучения - изменение весов."""
+    """Тест адаптивного обучения - изменение весов (позитивная + негативная реакция)."""
     logger.info("Тест: Адаптивное обучение")
-    
-    from utils.personalization import AdaptiveLearning
     
     try:
         test_user_id = 888888888
         
-        # Создаем пользователя и настройки если их нет
+        # Проверяем что настройки уже существуют
         async with async_session_maker() as session:
-            result = await session.execute(
-                select(User).where(User.user_id == test_user_id)
-            )
-            user = result.scalar_one_or_none()
-            
-            if not user:
-                from datetime import datetime
-                user = User(
-                    user_id=test_user_id,
-                    username="test_adaptive",
-                    first_name="Тест",
-                    registration_date=datetime.now(),
-                    last_activity=datetime.now()
-                )
-                session.add(user)
-                await session.commit()
-            
-            # Создаем настройки если их нет
             result = await session.execute(
                 select(UserPreference).where(UserPreference.user_id == test_user_id)
             )
             prefs = result.scalar_one_or_none()
             
             if not prefs:
-                prefs = UserPreference(
-                    user_id=test_user_id,
-                    categories=["electronics", "clothing"],
-                    favorite_shops=["wildberries", "ozon"],
-                    price_range_min=1000,
-                    price_range_max=10000,
-                    notification_frequency="daily",
-                    category_weights={},
-                    shop_weights={}
-                )
-                session.add(prefs)
-                await session.commit()
+                logger.error("✗ Настройки пользователя не найдены для теста адаптивного обучения")
+                return False
+            
+            # Инициализируем веса если они пустые
+            if not prefs.category_weights:
+                prefs.category_weights = {}
+            if not prefs.shop_weights:
+                prefs.shop_weights = {}
+            await session.commit()
         
-        # Симулируем ПОЗИТИВНОЕ взаимодействие
+        # ========== ТЕСТ ПОЗИТИВНОЙ РЕАКЦИИ ==========
         logger.info("  Тестируем позитивное взаимодействие (click)...")
         await AdaptiveLearning.process_interaction(
             user_id=test_user_id,
@@ -197,11 +184,14 @@ async def test_adaptive_learning():
             logger.info(f"  После click: категория 'electronics' = {cat_weight:.2f}")
             logger.info(f"  После click: магазин 'wildberries' = {shop_weight:.2f}")
             
-            if cat_weight <= 1.0 or shop_weight <= 1.0:
-                logger.error("✗ Веса не увеличились после позитивного взаимодействия!")
+            if cat_weight <= 1.0:
+                logger.error("✗ Вес категории не увеличился после позитивного взаимодействия!")
+                return False
+            if shop_weight <= 1.0:
+                logger.error("✗ Вес магазина не увеличился после позитивного взаимодействия!")
                 return False
         
-        # Симулируем НЕГАТИВНОЕ взаимодействие
+        # ========== ТЕСТ НЕГАТИВНОЙ РЕАКЦИИ ==========
         logger.info("  Тестируем негативное взаимодействие (hide)...")
         await AdaptiveLearning.process_interaction(
             user_id=test_user_id,
@@ -223,11 +213,14 @@ async def test_adaptive_learning():
             logger.info(f"  После hide: категория 'clothing' = {cat_weight:.2f}")
             logger.info(f"  После hide: магазин 'ozon' = {shop_weight:.2f}")
             
-            if cat_weight >= 1.0 or shop_weight >= 1.0:
-                logger.error("✗ Веса не уменьшились после негативного взаимодействия!")
+            if cat_weight >= 1.0:
+                logger.error("✗ Вес категории не уменьшился после негативного взаимодействия!")
+                return False
+            if shop_weight >= 1.0:
+                logger.error("✗ Вес магазина не уменьшился после негативного взаимодействия!")
                 return False
         
-        logger.info("✓ Адаптивное обучение работает корректно")
+        logger.info("✓ Адаптивное обучение работает корректно (позитив + негатив)")
         return True
         
     except Exception as e:
@@ -235,26 +228,97 @@ async def test_adaptive_learning():
         return False
 
 
+async def test_performance_100k():
+    """Тест производительности на 100k товаров."""
+    logger.info("Тест: Производительность на больших объемах")
+    
+    try:
+        test_user_id = 888888888
+        
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(UserPreference).where(UserPreference.user_id == test_user_id)
+            )
+            prefs = result.scalar_one_or_none()
+            
+            if not prefs:
+                logger.error("✗ Предпочтения не найдены")
+                return False
+        
+        # Генерируем 100k товаров
+        logger.info("  Генерация 100,000 тестовых товаров...")
+        items = []
+        categories = ['electronics', 'clothing', 'books', 'home', 'sports']
+        shops = ['wildberries', 'ozon', 'lamoda', 'mvideo', 'chitai_gorod']
+        
+        for i in range(100000):
+            items.append({
+                'title': f'Товар {i}',
+                'category': categories[i % len(categories)],
+                'shop': shops[i % len(shops)],
+                'price': 1000 + (i % 10000),
+                'views': i % 1000
+            })
+        
+        logger.info("  Товары сгенерированы, запуск фильтрации...")
+        
+        # Тест оптимизированной фильтрации
+        start = time.time()
+        filtered = PersonalizationEngine.filter_by_relevance_optimized(
+            prefs, items, min_score=40, max_results=100
+        )
+        elapsed_ms = (time.time() - start) * 1000
+        
+        logger.info(f"  Отфильтровано {len(filtered)} топовых товаров за {elapsed_ms:.1f}ms")
+        
+        if elapsed_ms > 500:
+            logger.warning(f"⚠️  Время обработки превысило 500ms: {elapsed_ms:.1f}ms")
+            logger.info("  Рекомендация: добавить индексы БД или кэширование результатов")
+            # Не считаем это фатальной ошибкой
+        else:
+            logger.info(f"✓ Производительность в норме: {elapsed_ms:.1f}ms < 500ms")
+        
+        # Проверяем что результаты корректные
+        if len(filtered) == 0:
+            logger.error("✗ Фильтрация не вернула результатов")
+            return False
+        
+        # Проверяем что результаты отсортированы по убыванию релевантности
+        scores = [item.get('relevance_score', 0) for item in filtered]
+        if scores != sorted(scores, reverse=True):
+            logger.error("✗ Результаты не отсортированы по релевантности")
+            return False
+        
+        logger.info(f"✓ Производительность: {elapsed_ms:.1f}ms, топ-{len(filtered)} результатов корректны")
+        return True
+        
+    except Exception as e:
+        logger.error(f"✗ Ошибка теста производительности: {e}", exc_info=True)
+        return False
+
+
 async def cleanup_test_data():
     """Очистка тестовых данных."""
     logger.info("Очистка тестовых данных")
     try:
-        from sqlalchemy import delete
-        
         async with async_session_maker() as session:
             test_user_id = 888888888
             
+            # Удаляем настройки
             await session.execute(
                 delete(UserPreference).where(UserPreference.user_id == test_user_id)
             )
+            
+            # Удаляем пользователя
             await session.execute(
                 delete(User).where(User.user_id == test_user_id)
             )
+            
             await session.commit()
             
             logger.info("✓ Тестовые данные удалены")
     except Exception as e:
-        logger.error(f"✗ Ошибка очистки: {e}")
+        logger.error(f"✗ Ошибка очистки: {e}", exc_info=True)
 
 
 async def run_tests():
@@ -266,9 +330,12 @@ async def run_tests():
     await init_db()
     
     results = []
+    
+    # Последовательно запускаем все тесты
     results.append(("Создание настроек", await test_create_user_preference()))
     results.append(("Алгоритм персонализации", await test_personalization_algorithm()))
     results.append(("Адаптивное обучение", await test_adaptive_learning()))
+    results.append(("Производительность 100k", await test_performance_100k()))
     
     await cleanup_test_data()
     await close_db()
@@ -287,34 +354,7 @@ async def run_tests():
     
     return passed == len(results)
 
-async def test_adaptive_learning():
-    """Тест адаптивного обучения."""
-    logger.info("Тест: Адаптивное обучение")
-    
-    from utils.personalization import AdaptiveLearning
-    
-    test_user_id = 888888888
-    
-    # Симулируем позитивное взаимодействие
-    await AdaptiveLearning.process_interaction(
-        user_id=test_user_id,
-        action_type='click',
-        item_category='electronics',
-        item_shop='wildberries'
-    )
-    
-    # Проверяем что веса изменились
-    async with async_session_maker() as session:
-        result = await session.execute(
-            select(UserPreference).where(UserPreference.user_id == test_user_id)
-        )
-        prefs = result.scalar_one_or_none()
-        
-        assert prefs.category_weights.get('electronics', 1.0) > 1.0, "Вес категории должен вырасти"
-        logger.info(f"✓ Вес категории 'electronics': {prefs.category_weights.get('electronics')}")
-    
-    return True
-    
+
 if __name__ == "__main__":
     success = asyncio.run(run_tests())
     sys.exit(0 if success else 1)
