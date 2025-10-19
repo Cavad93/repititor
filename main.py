@@ -6,7 +6,7 @@ from aiogram.client.default import DefaultBotProperties
 
 from config.settings import settings
 from database.connection import init_db
-from handlers import registration, menu, profile
+from handlers import registration, menu, profile, onboarding, cashback
 from utils.logger import setup_logging
 
 
@@ -26,7 +26,7 @@ async def main():
     await init_db()
     logger.info("База данных инициализирована")
     
-    # НОВОЕ: Запускаем миграции для обновления схемы БД
+    # Запускаем миграции для обновления схемы БД
     try:
         from database.migrations import run_all_migrations
         await run_all_migrations()
@@ -48,12 +48,15 @@ async def main():
     dp.include_router(registration.router)
     dp.include_router(menu.router)
     dp.include_router(profile.router)
-
-    # Подключаем роутер анкетирования (Этап 2)
-    from handlers import onboarding
     dp.include_router(onboarding.router)
+    dp.include_router(cashback.router)  # НОВОЕ: Роутер кэшбэка
     
     logger.info("Обработчики подключены")
+    
+    # Запускаем фоновую задачу проверки заказов
+    from tasks.cashback_checker import run_periodic_checker
+    asyncio.create_task(run_periodic_checker(interval_hours=1))
+    logger.info("Фоновая задача проверки заказов запущена")
     
     try:
         # Удаляем все pending updates при старте
