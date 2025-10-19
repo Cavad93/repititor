@@ -31,8 +31,7 @@ async def check_pending_orders():
     try:
         # Инициализируем менеджер
         affiliate_manager = AffiliateManager({
-            'ADMITAD_CLIENT_ID': settings.ADMITAD_CLIENT_ID,
-            'ADMITAD_CLIENT_SECRET': settings.ADMITAD_CLIENT_SECRET,
+            'ADMITAD_AUTH_HEADER': settings.ADMITAD_AUTH_HEADER,
             'ADMITAD_WEBSITE_ID': settings.ADMITAD_WEBSITE_ID,
             'BACKIT_API_KEY': settings.BACKIT_API_KEY,
             'BACKIT_USER_ID': settings.BACKIT_USER_ID,
