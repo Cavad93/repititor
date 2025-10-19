@@ -11,6 +11,7 @@ from database.connection import async_session_maker
 from database.models import User, UserPreference
 from handlers.states import OnboardingStates
 from database.models import UserPreference
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,67 @@ async def callback_cancel_onboarding(callback: CallbackQuery, state: FSMContext)
         "❌ Настройка отменена.\n\n"
         "Используй /setup чтобы настроить персонализацию в любое время."
     )
+
+
+def validate_preferences_data(data: dict) -> tuple[bool, str]:
+    """
+    Валидирует структуру данных персонализации.
+    
+    Args:
+        data: Словарь с данными из FSM state
+        
+    Returns:
+        tuple: (is_valid: bool, error_message: str)
+    """
+    # Проверка категорий
+    categories = data.get("selected_categories", [])
+    if not isinstance(categories, list):
+        return False, "Категории должны быть списком"
+    if not categories:
+        return False, "Необходимо выбрать хотя бы одну категорию"
+    if not all(isinstance(cat, str) for cat in categories):
+        return False, "Все категории должны быть строками"
+    
+    # Проверка магазинов
+    shops = data.get("selected_shops", [])
+    if not isinstance(shops, list):
+        return False, "Магазины должны быть списком"
+    if not shops:
+        return False, "Необходимо выбрать хотя бы один магазин"
+    if not all(isinstance(shop, str) for shop in shops):
+        return False, "Все магазины должны быть строками"
+    
+    # Проверка ценовых диапазонов
+    prices = data.get("selected_price_ranges", [])
+    if not isinstance(prices, list):
+        return False, "Ценовые диапазоны должны быть списком"
+    if not prices:
+        return False, "Необходимо выбрать хотя бы один ценовой диапазон"
+    if not all(isinstance(price, str) for price in prices):
+        return False, "Все ценовые диапазоны должны быть строками"
+    
+    # Проверка частоты уведомлений
+    notif_freq = data.get("notification_frequency")
+    if not notif_freq:
+        return False, "Необходимо выбрать частоту уведомлений"
+    valid_frequencies = ["instant", "daily", "twice_daily", "three_weekly", "manual"]
+    if notif_freq not in valid_frequencies:
+        return False, f"Недопустимая частота уведомлений: {notif_freq}"
+    
+    # Проверка времени уведомлений (если требуется)
+    if notif_freq in ["daily", "twice_daily"]:
+        notif_time = data.get("notification_time")
+        if not notif_time:
+            return False, "Необходимо выбрать время уведомлений"
+        # Проверка формата HH:MM
+        try:
+            hour, minute = map(int, notif_time.split(":"))
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                return False, "Недопустимое время уведомлений"
+        except (ValueError, AttributeError):
+            return False, "Неверный формат времени уведомлений"
+    
+    return True, ""
 
 
 async def start_onboarding(message: Message, state: FSMContext, is_restart: bool = False):
@@ -670,7 +732,7 @@ async def show_summary(message: Message, state: FSMContext):
 @router.callback_query(F.data == "onb:save")
 async def callback_save_preferences(callback: CallbackQuery, state: FSMContext):
     """
-    Сохранение настроек в базу данных.
+    Сохранение настроек в базу данных с валидацией.
     
     Создает или обновляет запись в таблице UserPreference.
     """
@@ -678,6 +740,17 @@ async def callback_save_preferences(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     
     data = await state.get_data()
+    
+    # НОВОЕ: Валидация данных перед сохранением
+    is_valid, error_message = validate_preferences_data(data)
+    if not is_valid:
+        logger.error(f"Валидация настроек пользователя {user_id} не пройдена: {error_message}")
+        await callback.message.edit_text(
+            f"❌ Ошибка валидации данных:\n{error_message}\n\n"
+            "Попробуй пройти анкетирование заново через /setup"
+        )
+        await state.clear()
+        return
     
     async with async_session_maker() as session:
         try:
@@ -703,8 +776,13 @@ async def callback_save_preferences(callback: CallbackQuery, state: FSMContext):
                         all_maxs.append(999999)
                     else:
                         parts = price_range.split("-")
-                        all_mins.append(int(parts[0]))
-                        all_maxs.append(int(parts[1]))
+                        if len(parts) == 2:
+                            try:
+                                all_mins.append(int(parts[0]))
+                                all_maxs.append(int(parts[1]))
+                            except ValueError:
+                                logger.warning(f"Неверный формат ценового диапазона: {price_range}")
+                                continue
                 
                 if all_mins and all_maxs:
                     price_min = min(all_mins)
@@ -714,8 +792,12 @@ async def callback_save_preferences(callback: CallbackQuery, state: FSMContext):
             notif_time = data.get("notification_time")
             time_obj = None
             if notif_time:
-                hour, minute = map(int, notif_time.split(":"))
-                time_obj = dt_time(hour, minute)
+                try:
+                    hour, minute = map(int, notif_time.split(":"))
+                    time_obj = dt_time(hour, minute)
+                except (ValueError, AttributeError) as e:
+                    logger.error(f"Ошибка парсинга времени уведомлений: {e}")
+                    time_obj = None
             
             if prefs:
                 # Обновляем существующие настройки
