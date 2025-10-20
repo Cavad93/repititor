@@ -147,3 +147,20 @@ class PromotionStorage:
             )
             await session.commit()
             logger.info("✓ Истекшие акции деактивированы")
+            
+    @classmethod
+    async def get_stats_by_shop(cls) -> Dict[str, int]:
+        """
+        Возвращает статистику по магазинам.
+        """
+        async with async_session_maker() as session:
+            from sqlalchemy import func
+            from database.models import Promotion
+            
+            result = await session.execute(
+                select(Promotion.shop, func.count(Promotion.id))
+                .where(Promotion.is_active == True)
+                .group_by(Promotion.shop)
+            )
+            
+            return {shop: count for shop, count in result.all()}
