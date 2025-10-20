@@ -1,7 +1,8 @@
 """
 Менеджер партнерских программ.
 
-Управляет работой с Admitad партнерской программой для генерации кэшбэк-ссылок.
+Управляет работой с несколькими партнерскими программами для генерации кэшбэк-ссылок.
+Поддерживает Admitad и CityAds с возможностью выбора приоритетной сети.
 """
 
 import logging
@@ -9,6 +10,7 @@ from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse
 
 from .admitad import AdmitadService
+from .epn import EPNService
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +19,8 @@ class AffiliateManager:
     """
     Менеджер для работы с партнерскими программами.
     
-    Управляет генерацией кэшбэк-ссылок через Admitad для всех поддерживаемых магазинов.
+    Управляет генерацией кэшбэк-ссылок через Admitad и CityAds.
+    Автоматически выбирает доступную сеть или использует приоритетную.
     """
     
     def __init__(self, config: Dict[str, Any]):
@@ -25,18 +28,27 @@ class AffiliateManager:
         Инициализация с настройками из config.
         
         Args:
-            config: Словарь с настройками для Admitad сервиса
+            config: Словарь с настройками для партнерских сервисов
         """
         self.config = config
         
-        # Инициализируем единственный сервис - Admitad
+        # Инициализируем Admitad
         self.admitad = AdmitadService({
             'auth_header': config.get('ADMITAD_AUTH_HEADER'),
             'website_id': config.get('ADMITAD_WEBSITE_ID')
         })
         
-        # Список поддерживаемых магазинов через Admitad
-        # Все эти магазины работают через единственную партнерскую программу
+        # Инициализируем EPN
+        self.epn = EPNService({
+            'deeplink_hashes': config.get('EPN_DEEPLINK_HASHES', {}),
+            'client_id': config.get('EPN_CLIENT_ID'),
+            'client_secret': config.get('EPN_CLIENT_SECRET')
+        })
+        
+        # Определяем приоритетную сеть (по умолчанию EPN как первая альтернатива)
+        self.primary_network = config.get('PRIMARY_NETWORK', 'epn')
+        
+        # Список поддерживаемых магазинов
         self.supported_shops = [
             'wildberries',
             'ozon',
@@ -95,7 +107,12 @@ class AffiliateManager:
         product_info: Optional[Dict] = None
     ) -> Dict[str, Any]:
         """
-        Генерирует партнерскую ссылку с кэшбэком через Admitad.
+        Генерирует партнерскую ссылку с кэшбэком через доступную сеть.
+        
+        Логика выбора сети:
+        1. Пытается использовать приоритетную сеть (PRIMARY_NETWORK)
+        2. Если не удалось - пробует альтернативную сеть
+        3. Если обе не работают - возвращает ошибку
         
         Args:
             original_url: Оригинальная ссылка на товар
@@ -105,7 +122,7 @@ class AffiliateManager:
         Returns:
             Dict с полями:
                 - affiliate_url: Партнерская ссылка
-                - network: Всегда 'admitad'
+                - network: 'admitad' или 'cityads'
                 - cashback_percent: Процент кэшбэка
                 - shop: Название магазина
                 - error: Сообщение об ошибке (если не удалось)
@@ -120,61 +137,76 @@ class AffiliateManager:
                 'original_url': original_url
             }
         
-        # Проверяем что магазин есть в списке поддерживаемых Admitad
+        # Проверяем что магазин есть в списке поддерживаемых
         if shop not in self.supported_shops:
             return {
-                'error': f'Магазин {shop} не поддерживается через Admitad',
+                'error': f'Магазин {shop} не поддерживается',
                 'original_url': original_url,
                 'shop': shop
             }
         
-        # Проверяем что Admitad настроен (есть API ключи)
-        if not self.admitad.is_configured():
-            logger.error("Admitad не настроен - отсутствуют ADMITAD_AUTH_HEADER или ADMITAD_WEBSITE_ID")
-            return {
-                'error': 'Кэшбэк-сервис временно недоступен',
-                'original_url': original_url,
-                'shop': shop
-            }
+        # Определяем порядок попыток использования сетей
+        if self.primary_network == 'epn':
+            networks = [
+                ('epn', self.epn),
+                ('admitad', self.admitad)
+            ]
+        else:
+            networks = [
+                ('admitad', self.admitad),
+                ('epn', self.epn)
+            ]
         
-        # Пытаемся создать партнерскую ссылку через Admitad
-        try:
-            affiliate_url = await self.admitad.generate_affiliate_link(
-                original_url, user_id, product_info
-            )
+        # Пробуем создать ссылку через доступные сети
+        last_error = None
+        
+        for network_name, network_service in networks:
+            # Пропускаем не настроенные сети
+            if not network_service.is_configured():
+                logger.info(f"{network_name.title()} не настроен - пропускаем")
+                continue
             
-            # Если ссылка успешно создана
-            if affiliate_url:
-                # Получаем процент кэшбэка для этого магазина
-                cashback_percent = await self.admitad.get_cashback_percent(
-                    shop, 
-                    product_info.get('category', '') if product_info else ''
+            try:
+                logger.info(f"Попытка создать ссылку через {network_name.title()}")
+                
+                # Пытаемся создать партнерскую ссылку
+                affiliate_url = await network_service.generate_affiliate_link(
+                    original_url, user_id, product_info
                 )
                 
-                # Возвращаем успешный результат
-                return {
-                    'affiliate_url': affiliate_url,
-                    'network': 'admitad',
-                    'cashback_percent': cashback_percent,
-                    'shop': shop
-                }
-            else:
-                # Admitad вернул None - значит не смог создать ссылку
-                logger.warning(f"Admitad не смог создать ссылку для {shop}")
-                return {
-                    'error': 'Не удалось создать кэшбэк-ссылку для этого магазина',
-                    'original_url': original_url,
-                    'shop': shop
-                }
-                
-        except Exception as e:
-            # Произошла непредвиденная ошибка при обращении к Admitad
-            logger.error(f"Ошибка при генерации ссылки через Admitad: {e}", exc_info=True)
-            return {
-                'error': 'Кэшбэк-сервис временно недоступен',
-                'original_url': original_url,
-                'shop': shop
-            }
+                # Если ссылка успешно создана
+                if affiliate_url:
+                    # Получаем процент кэшбэка для этого магазина
+                    cashback_percent = await network_service.get_cashback_percent(
+                        shop, 
+                        product_info.get('category', '') if product_info else ''
+                    )
+                    
+                    logger.info(f"✓ Ссылка создана через {network_name.title()}")
+                    
+                    # Возвращаем успешный результат
+                    return {
+                        'affiliate_url': affiliate_url,
+                        'network': network_name,
+                        'cashback_percent': cashback_percent,
+                        'shop': shop
+                    }
+                else:
+                    # Сеть вернула None
+                    last_error = f'{network_name.title()} не смог создать ссылку'
+                    logger.warning(last_error)
+            
+            except Exception as e:
+                # Произошла ошибка при обращении к сети
+                last_error = f'Ошибка {network_name.title()}: {str(e)}'
+                logger.error(f"Ошибка при генерации ссылки через {network_name.title()}: {e}", exc_info=True)
+        
+        # Если ни одна сеть не сработала
+        return {
+            'error': last_error or 'Кэшбэк-сервис временно недоступен',
+            'original_url': original_url,
+            'shop': shop
+        }
     
     async def check_all_pending_orders(self) -> List[Dict[str, Any]]:
         """
