@@ -100,6 +100,9 @@ class Settings(BaseSettings):
         extra = "allow"
 
 
-# Создаем глобальный экземпляр настроек
-# Импортируйте его в других модулях: from config.settings import settings
+# EPN настройки
+EPN_CLIENT_ID: Optional[str] = None
+EPN_CLIENT_SECRET: Optional[str] = None
+PRIMARY_NETWORK: str = "epn"
+
 settings = Settings()
