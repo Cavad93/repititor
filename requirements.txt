@@ -20,6 +20,5 @@ python-dateutil==2.9.0
 # HTTP клиент для работы с партнерскими API
 aiohttp==3.10.10
 
-aiohttp==3.9.1
 beautifulsoup4==4.12.2
 lxml==4.9.3
