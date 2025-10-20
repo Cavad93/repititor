@@ -1,3 +1,5 @@
+# config/settings.py
+
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import Optional
@@ -52,9 +54,9 @@ class Settings(BaseSettings):
     )
     
     
-# ==================== ПАРТНЕРСКИЕ ПРОГРАММЫ ====================
+    # ==================== ПАРТНЕРСКИЕ ПРОГРАММЫ ====================
     
-    # Admitad - единственная партнерская программа
+    # Admitad - партнерская программа для офлайн магазинов
     ADMITAD_AUTH_HEADER: Optional[str] = Field(
         default=None,
         description="Admitad Base64 Authorization Header (включая 'Basic ')"
@@ -62,6 +64,30 @@ class Settings(BaseSettings):
     ADMITAD_WEBSITE_ID: Optional[str] = Field(
         default=None,
         description="Admitad Website/Client ID (строковый идентификатор площадки)"
+    )
+    
+    # EPN - партнерская программа для маркетплейсов (AliExpress, Ozon, Wildberries)
+    EPN_CLIENT_ID: Optional[str] = Field(
+        default=None,
+        description="EPN Client ID для API доступа"
+    )
+    EPN_CLIENT_SECRET: Optional[str] = Field(
+        default=None,
+        description="EPN Client Secret для API доступа"
+    )
+    EPN_API_KEY: Optional[str] = Field(
+        default=None,
+        description="EPN API Key (альтернатива Client ID/Secret)"
+    )
+    EPN_USER_ID: Optional[str] = Field(
+        default=None,
+        description="EPN User ID (publisher ID)"
+    )
+    
+    # Приоритетная партнерская сеть
+    PRIMARY_NETWORK: str = Field(
+        default="epn",
+        description="Primary affiliate network (epn or admitad)"
     )
     
     # Настройки кэшбэка
@@ -73,7 +99,6 @@ class Settings(BaseSettings):
         default=30,
         description="Days to wait for cashback confirmation"
     )
-
 
     @property
     def database_url(self) -> str:
@@ -100,9 +125,5 @@ class Settings(BaseSettings):
         extra = "allow"
 
 
-# EPN настройки
-EPN_CLIENT_ID: Optional[str] = None
-EPN_CLIENT_SECRET: Optional[str] = None
-PRIMARY_NETWORK: str = "epn"
-
+# Создаем глобальный экземпляр настроек
 settings = Settings()
