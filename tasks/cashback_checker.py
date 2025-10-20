@@ -34,7 +34,11 @@ async def check_pending_orders():
         # Инициализируем менеджер с настройками только для Admitad
         affiliate_manager = AffiliateManager({
             'ADMITAD_AUTH_HEADER': settings.ADMITAD_AUTH_HEADER,
-            'ADMITAD_WEBSITE_ID': settings.ADMITAD_WEBSITE_ID
+            'ADMITAD_WEBSITE_ID': settings.ADMITAD_WEBSITE_ID,
+            'EPN_DEEPLINK_HASHES': {},
+            'EPN_CLIENT_ID': settings.EPN_CLIENT_ID,
+            'EPN_CLIENT_SECRET': settings.EPN_CLIENT_SECRET,
+            'PRIMARY_NETWORK': settings.PRIMARY_NETWORK
         })
         
         # Проверяем все pending заказы
