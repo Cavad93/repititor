@@ -252,7 +252,11 @@ async def handle_product_url(message: Message):
         # Теперь передаем только настройки для Admitad
         affiliate_manager = AffiliateManager({
             'ADMITAD_AUTH_HEADER': settings.ADMITAD_AUTH_HEADER,
-            'ADMITAD_WEBSITE_ID': settings.ADMITAD_WEBSITE_ID
+            'ADMITAD_WEBSITE_ID': settings.ADMITAD_WEBSITE_ID,
+            'EPN_DEEPLINK_HASHES': {},
+            'EPN_CLIENT_ID': settings.EPN_CLIENT_ID,
+            'EPN_CLIENT_SECRET': settings.EPN_CLIENT_SECRET,
+            'PRIMARY_NETWORK': settings.PRIMARY_NETWORK
         })
         
         # Генерируем партнерскую ссылку через Admitad
