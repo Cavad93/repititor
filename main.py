@@ -1,3 +1,5 @@
+# main.py
+
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
@@ -6,7 +8,7 @@ from aiogram.client.default import DefaultBotProperties
 
 from config.settings import settings
 from database.connection import init_db
-from handlers import registration, menu, profile, onboarding, cashback
+from handlers import registration, menu, profile, onboarding, cashback, deals
 from utils.logger import setup_logging
 
 
@@ -15,69 +17,70 @@ async def main():
     Главная функция для запуска бота.
     Инициализирует все необходимые компоненты и запускает polling.
     """
-    # Настраиваем логирование для отслеживания работы бота
     setup_logging()
     logger = logging.getLogger(__name__)
     
     logger.info("Запуск бота...")
     
-    # Инициализируем подключение к базе данных
-    # Это создаст все необходимые таблицы если их еще нет
+    # Инициализация БД и применение миграций
     await init_db()
     logger.info("База данных инициализирована")
     
-    # Запускаем миграции для обновления схемы БД
     try:
         from database.migrations import run_all_migrations
         await run_all_migrations()
     except Exception as e:
         logger.warning(f"Ошибка при запуске миграций (возможно, уже применены): {e}")
     
-    # Создаем экземпляр бота с токеном из настроек
-    # ParseMode.HTML позволяет использовать HTML-разметку в сообщениях
+    # Создание экземпляра бота
     bot = Bot(
         token=settings.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     
-    # Dispatcher управляет обработкой входящих сообщений и callback'ов
+    # Dispatcher для обработки сообщений
     dp = Dispatcher()
     
-    # Подключаем роутеры из разных модулей-обработчиков
-    # Это модульный подход - каждый раздел функционала в отдельном файле
+    # Подключение всех роутеров
     dp.include_router(registration.router)
     dp.include_router(menu.router)
     dp.include_router(profile.router)
     dp.include_router(onboarding.router)
-    dp.include_router(cashback.router)  # НОВОЕ: Роутер кэшбэка
+    dp.include_router(cashback.router)
+    dp.include_router(deals.router)  # НОВОЕ: Роутер акций и скидок
+    
+    # Подключение админ-команд (опционально)
+    try:
+        from utils import admin_commands
+        dp.include_router(admin_commands.router)
+        logger.info("Админ-команды подключены")
+    except ImportError:
+        logger.info("Модуль admin_commands не найден, пропускаем")
     
     logger.info("Обработчики подключены")
     
-    # Запускаем фоновую задачу проверки заказов
+    # Запуск фоновых задач
     from tasks.cashback_checker import run_periodic_checker
+    from tasks.promotions_updater import run_periodic_updater
+    
     asyncio.create_task(run_periodic_checker(interval_hours=1))
-    logger.info("Фоновая задача проверки заказов запущена")
+    asyncio.create_task(run_periodic_updater(interval_hours=6))
+    logger.info("Фоновые задачи запущены (проверка кэшбэка + обновление акций)")
     
     try:
-        # Удаляем все pending updates при старте
-        # Это гарантирует что бот обработает только новые сообщения
         await bot.delete_webhook(drop_pending_updates=True)
         logger.info("Бот успешно запущен и готов к работе")
         
-        # Запускаем polling - бот начинает принимать сообщения
         await dp.start_polling(bot)
     except Exception as e:
         logger.error(f"Критическая ошибка при запуске бота: {e}")
         raise
     finally:
-        # Корректное закрытие соединений при остановке бота
         await bot.session.close()
         logger.info("Бот остановлен")
 
 
 if __name__ == "__main__":
-    # Запускаем асинхронную main функцию
-    # asyncio.run() управляет event loop автоматически
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
