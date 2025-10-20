@@ -6,6 +6,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
+from handlers import promotions
 from config.settings import settings
 from database.connection import init_db
 from handlers import registration, menu, profile, onboarding, cashback, deals
@@ -47,7 +48,8 @@ async def main():
     dp.include_router(profile.router)
     dp.include_router(onboarding.router)
     dp.include_router(cashback.router)
-    dp.include_router(deals.router)  # НОВОЕ: Роутер акций и скидок
+    dp.include_router(deals.router)
+    dp.include_router(promotions.router)
     
     # Подключение админ-команд (опционально)
     try:
