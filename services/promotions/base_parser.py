@@ -103,25 +103,32 @@ class BasePromotionParser(ABC):
         # Проверяем robots.txt
         if not await self.check_robots_txt(url):
             logger.warning(f"Доступ к {url} запрещен robots.txt")
-            return {'status': 403, 'error': 'Blocked by robots.txt'}
+            return {'status': 403, 'content': '', 'error': 'Blocked by robots.txt'}
         
         # Добавляем задержку
         import asyncio
+        import ssl
         await asyncio.sleep(self.delay)
         
         try:
             headers = kwargs.pop('headers', {})
             headers['User-Agent'] = self.user_agent
             
+            # Создаем SSL контекст для обхода проблем с сертификатами
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            
             async with aiohttp.ClientSession() as session:
                 async with session.request(
                     method,
                     url,
                     headers=headers,
+                    ssl=ssl_context,
                     timeout=aiohttp.ClientTimeout(total=30),
                     **kwargs
                 ) as response:
-                    content = await response.read()
+                    content = await response.text()
                     
                     return {
                         'status': response.status,
@@ -132,7 +139,7 @@ class BasePromotionParser(ABC):
         
         except Exception as e:
             logger.error(f"Ошибка запроса {url}: {e}")
-            return {'status': 0, 'error': str(e)}
+            return {'status': 0, 'content': '', 'error': str(e)}
     
     @abstractmethod
     async def parse(self, **kwargs) -> List[Dict[str, Any]]:
