@@ -262,3 +262,69 @@ class BalanceOperation(Base):
     
     def __repr__(self):
         return f"<BalanceOperation(id={self.operation_id}, user={self.user_id}, type={self.operation_type}, amount={self.amount})>"
+
+
+# database/models.py
+# В конец файла добавить:
+
+class Promotion(Base):
+    """
+    Модель для хранения акций и промокодов из агрегаторов.
+    
+    Агрегируем акции из Едадила и других источников.
+    Используется для персонализированной выдачи пользователям.
+    """
+    __tablename__ = 'promotions'
+    
+    promotion_id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Идентификаторы
+    external_id = Column(VARCHAR(255), nullable=False, index=True, comment="ID from source (Edadeal, etc)")
+    source = Column(VARCHAR(50), nullable=False, default='edadeal', comment="Source: edadeal, manual, etc")
+    
+    # Основная информация
+    title = Column(String(512), nullable=False, comment="Promotion title")
+    description = Column(String(2048), nullable=True, comment="Full description")
+    shop = Column(VARCHAR(100), nullable=False, index=True, comment="Shop name: pyaterochka, magnit, etc")
+    category = Column(VARCHAR(100), nullable=False, index=True, comment="Category: products, pharmacy, etc")
+    
+    # Цены и скидки
+    price_old = Column(Integer, nullable=True, comment="Old price in kopecks")
+    price_new = Column(Integer, nullable=True, comment="New price in kopecks")
+    discount_percent = Column(Integer, nullable=True, comment="Discount percentage")
+    discount_amount = Column(Integer, nullable=True, comment="Discount amount in kopecks")
+    
+    # Промокод
+    promo_code = Column(VARCHAR(100), nullable=True, comment="Promo code if available")
+    
+    # Ссылки
+    url = Column(String(2048), nullable=True, comment="Link to promotion")
+    image_url = Column(String(2048), nullable=True, comment="Image URL")
+    
+    # Даты действия
+    start_date = Column(TIMESTAMP, nullable=True, comment="Promotion start date")
+    end_date = Column(TIMESTAMP, nullable=True, index=True, comment="Promotion end date")
+    
+    # Метаданные
+    views_count = Column(Integer, default=0, nullable=False, comment="Number of views")
+    clicks_count = Column(Integer, default=0, nullable=False, comment="Number of clicks")
+    quality_score = Column(Integer, default=50, nullable=False, comment="Quality score 0-100")
+    
+    # Статус
+    is_active = Column(Boolean, default=True, nullable=False, index=True, comment="Is active")
+    
+    # Временные метки
+    created_at = Column(TIMESTAMP, default=func.now(), nullable=False, comment="Created timestamp")
+    updated_at = Column(TIMESTAMP, default=func.now(), onupdate=func.now(), nullable=False, comment="Last update")
+    
+    # JSON с дополнительными данными
+    extra_data = Column(JSON, default=dict, nullable=True, comment="Additional data from source")
+    
+    def __repr__(self):
+        return f"<Promotion(id={self.promotion_id}, shop={self.shop}, title={self.title[:30]})>"
+    
+    def is_expired(self) -> bool:
+        """Проверяет истекла ли акция."""
+        if not self.end_date:
+            return False
+        return self.end_date < datetime.now()
